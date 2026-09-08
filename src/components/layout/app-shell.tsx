@@ -1,3 +1,4 @@
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
   Bell,
   ChevronDown,
@@ -43,6 +44,7 @@ function isActive(currentPath: string, targetPath: string) {
 export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
+  const reduceMotion = useReducedMotion()
   const { activeStore, stores, products, history, mode, setActiveStore } = useInventory()
   const { showToast } = useToast()
   const [scanOpen, setScanOpen] = useState(false)
@@ -268,7 +270,17 @@ export function AppShell() {
 
       <Button aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)} className="fixed bottom-7 right-36 z-40 hidden h-[52px] bg-teal-700 text-white lg:inline-flex"><Mic />Voice AI</Button>
       <main className="px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
-        <Outlet />
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={location.pathname}
+            initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -4, scale: 0.998 }}
+            transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_1fr_72px_1fr_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
@@ -278,7 +290,7 @@ export function AppShell() {
         <button
           type="button"
           aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)}
-          className="-mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition active:translate-y-1"
+          className="-mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition-[transform,box-shadow] duration-200 hover:scale-[1.03] hover:shadow-[0_20px_50px_rgba(13,148,136,0.38)] active:scale-95"
         >
           <Mic className="size-7" />
         </button>
@@ -324,7 +336,7 @@ function NavItem({
           active && 'opacity-100',
         )}
       />
-      <Icon className="size-4 transition group-hover:scale-110" />
+      <Icon className={cn('size-4 transition group-hover:scale-110', active && 'text-emerald-300')} />
       <span>{item.label}</span>
     </NavLink>
   )
@@ -343,12 +355,29 @@ function MobileNavItem({
     <NavLink
       to={item.path}
       className={cn(
-        'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] text-white/50 transition',
-        active && 'bg-white/[0.08] text-cyan-100',
+        'group flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[11px] text-slate-500 transition-colors duration-200 dark:text-white/50',
+        active && 'text-[#0D9488] dark:text-emerald-300',
       )}
     >
-      <Icon className={cn('size-5 transition', active && 'scale-110')} />
-      <span>{item.label}</span>
+      <span className="relative flex size-10 items-center justify-center rounded-2xl">
+        {active ? (
+          <motion.span
+            layoutId="mobile-nav-active-indicator"
+            className="absolute inset-0 rounded-2xl bg-[#d9f4eb] shadow-[0_7px_22px_rgba(13,148,136,0.18)] dark:bg-teal-300/15 dark:shadow-[0_8px_24px_rgba(45,212,191,0.12)]"
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          />
+        ) : null}
+        <Icon
+          strokeWidth={active ? 2.5 : 2}
+          className={cn(
+            'relative z-10 size-5 transition-[color,transform] duration-200 group-hover:scale-105 group-hover:text-teal-600 dark:group-hover:text-emerald-300',
+            active && 'scale-110 text-[#0D9488] dark:text-emerald-300',
+          )}
+        />
+      </span>
+      <span className={cn('transition-colors duration-200', active && 'font-semibold')}>
+        {item.label}
+      </span>
     </NavLink>
   )
 }
