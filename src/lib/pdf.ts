@@ -1,4 +1,4 @@
-import jsPDF from 'jspdf'
+import type jsPDF from 'jspdf'
 
 import { dateTimeLabel, formatCurrency } from '@/lib/format'
 import type { CartItem, HistoryItem, Product, RevenueRow, StoreRecord, TransactionCategory } from '@/lib/types'
@@ -25,7 +25,7 @@ function addHeader(doc: jsPDF, title: string, subtitle?: string) {
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(16)
-  doc.text(title, 14, 16)
+  doc.text(title, 14, 12, { maxWidth: 182 })
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
   doc.text(subtitle ?? `Dicetak ${dateTimeLabel(new Date())}`, 14, 24)
@@ -36,31 +36,26 @@ function drawTable(doc: jsPDF, columns: string[], rows: string[][], startY = 44)
   let y = startY
   const pageHeight = doc.internal.pageSize.getHeight()
   const colWidth = 182 / columns.length
-
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  doc.setFillColor(235, 244, 255)
-  doc.rect(14, y - 5, 182, 8, 'F')
-  columns.forEach((column, index) => doc.text(column, 16 + index * colWidth, y))
-  y += 8
-  doc.setFont('helvetica', 'normal')
-
-  rows.forEach((row) => {
-    if (y > pageHeight - 18) {
-      doc.addPage()
-      y = 18
-    }
-
-    row.forEach((cell, index) => {
-      doc.text(String(cell), 16 + index * colWidth, y, { maxWidth: colWidth - 4 })
-    })
-    y += 7
+  const header = () => {
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setFillColor(235, 244, 255)
+    doc.rect(14, y - 5, 182, 8, 'F')
+    columns.forEach((column, index) => doc.text(column, 16 + index * colWidth, y))
+    y += 8; doc.setFont('helvetica', 'normal')
+  }
+  header()
+  rows.forEach(row => {
+    const cells = row.map(cell => doc.splitTextToSize(String(cell), colWidth - 4) as string[])
+    const height = Math.max(...cells.map(cell => cell.length)) * 4 + 4
+    if (y + height > pageHeight - 18) { doc.addPage(); y = 18; header() }
+    cells.forEach((cell, index) => doc.text(cell, 16 + index * colWidth, y))
+    y += height
   })
-
+  if (y > pageHeight - 30) { doc.addPage(); y = 18 }
   return y
 }
 
-export function downloadRevenuePdf(title: string, rows: RevenueRow[], total: number) {
+export async function downloadRevenuePdf(title: string, rows: RevenueRow[], total: number) {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF()
   addHeader(doc, title)
   const y = drawTable(
@@ -81,7 +76,8 @@ export function downloadRevenuePdf(title: string, rows: RevenueRow[], total: num
   doc.save(`${slug(title)}.pdf`)
 }
 
-export function downloadStockPdf(title: string, products: Product[]) {
+export async function downloadStockPdf(title: string, products: Product[]) {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF()
   addHeader(doc, title)
   drawTable(
@@ -98,7 +94,8 @@ export function downloadStockPdf(title: string, products: Product[]) {
   doc.save(`${slug(title)}.pdf`)
 }
 
-export function downloadMovementPdf(title: string, history: HistoryItem[]) {
+export async function downloadMovementPdf(title: string, history: HistoryItem[]) {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF()
   addHeader(doc, title)
   drawTable(
@@ -114,12 +111,13 @@ export function downloadMovementPdf(title: string, history: HistoryItem[]) {
   doc.save(`${slug(title)}.pdf`)
 }
 
-export function downloadReceiptPdf(
+export async function downloadReceiptPdf(
   store: StoreRecord | null,
   items: CartItem[],
   category: TransactionCategory,
 ) {
-  const doc = new jsPDF({ unit: 'mm', format: [80, 180] })
+  const { default: jsPDF } = await import('jspdf')
+  const doc = new jsPDF({ unit: 'mm', format: [80, Math.max(180, 110 + items.reduce((height, item) => height + 15 + Math.ceil(item.product.namaBarang.length / 24) * 4, 0))] })
   const storeName = store?.name ?? 'ABElektronik'
   const total = items.reduce((sum, item) => sum + item.product.harga * item.quantity, 0)
 
@@ -135,7 +133,9 @@ export function downloadReceiptPdf(
   let y = 39
   items.forEach((item) => {
     doc.setFont('helvetica', 'bold')
-    doc.text(item.product.namaBarang, 8, y, { maxWidth: 42 })
+    const lines = doc.splitTextToSize(item.product.namaBarang, 64) as string[]
+    doc.text(lines, 8, y)
+    y += (lines.length - 1) * 4
     doc.setFont('helvetica', 'normal')
     doc.text(`${item.quantity} x ${formatCurrency(item.product.harga)}`, 8, y + 5)
     doc.text(formatCurrency(item.product.harga * item.quantity), 72, y + 5, { align: 'right' })

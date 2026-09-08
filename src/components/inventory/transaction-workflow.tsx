@@ -10,7 +10,7 @@ import {
   ShoppingCart,
   Trash2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
@@ -35,7 +35,11 @@ import { routes } from '@/lib/navigation'
 import { downloadReceiptPdf, printReceiptWindow } from '@/lib/pdf'
 import type { CartItem, HistoryItem, Product, TransactionCategory } from '@/lib/types'
 
+const VoiceDialog = lazy(() => import('./voice-dialog').then(m => ({ default: m.VoiceDialog })))
+
 type TransactionWorkflowProps = {
+  voiceOpen: boolean
+  onVoiceOpenChange: (open: boolean) => void
   scannerOpen: boolean
   onScannerOpenChange: (open: boolean) => void
 }
@@ -52,7 +56,7 @@ function clampQuantity(value: number, max: number, category: TransactionCategory
   return Math.floor(value)
 }
 
-export function TransactionWorkflow({ scannerOpen, onScannerOpenChange }: TransactionWorkflowProps) {
+export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpen, onVoiceOpenChange }: TransactionWorkflowProps) {
   const navigate = useNavigate()
   const { products, activeStore, processTransaction } = useInventory()
   const { showToast } = useToast()
@@ -65,6 +69,16 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange }: Transa
   const [lastCategory, setLastCategory] = useState<TransactionCategory>('keluar')
   const [createdHistory, setCreatedHistory] = useState<HistoryItem[]>([])
   const [processing, setProcessing] = useState(false)
+  const submitLock = useRef(false)
+
+  const commitTransaction = async (cart: CartItem[], kind: TransactionCategory) => {
+    if (submitLock.current) throw new Error('Transaksi sedang diproses')
+    submitLock.current = true
+    try {
+      const created = await processTransaction({ category: kind, items: cart, operator: 'Kasir' })
+      setCreatedHistory(created); setLastItems(cart); setLastCategory(kind)
+    } finally { submitLock.current = false }
+  }
 
   const total = useMemo(
     () => items.reduce((sum, item) => sum + item.product.harga * item.quantity, 0),
@@ -107,6 +121,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange }: Transa
   }
 
   const handleProcess = async () => {
+    if (submitLock.current) return
     if (!items.length) {
       showToast('Keranjang masih kosong', 'error')
       return
@@ -114,14 +129,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange }: Transa
 
     setProcessing(true)
     try {
-      const created = await processTransaction({
-        category,
-        items,
-        operator: 'Kasir',
-      })
-      setCreatedHistory(created)
-      setLastItems(items)
-      setLastCategory(category)
+      await commitTransaction(items, category)
       setItems([])
       setCartOpen(false)
       setResultOpen(true)
@@ -142,6 +150,9 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange }: Transa
 
   return (
     <>
+      {voiceOpen && <Suspense fallback={<p role="status" className="fixed bottom-28 left-4 z-[60] rounded-xl bg-slate-900 p-4 text-white">Menyiapkan Voice AI?</p>}>
+        <VoiceDialog key={activeStore?.id} products={products} onClose={() => onVoiceOpenChange(false)} onConfirm={commitTransaction} />
+      </Suspense>}
       <ScannerDialog
         open={scannerOpen}
         onOpenChange={onScannerOpenChange}
@@ -150,7 +161,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange }: Transa
         onMissingBarcode={handleMissingBarcode}
       />
 
-      <Dialog open={cartOpen} onOpenChange={setCartOpen}>
+      <Dialog open={cartOpen} onOpenChange={open => { if (!submitLock.current) setCartOpen(open) }}>
         <DialogContent className="max-h-[92vh] overflow-hidden border-white/12 bg-[#121827]/96 p-0 text-white shadow-2xl sm:max-w-3xl max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl">
           <DialogHeader className="px-5 pt-5">
             <DialogTitle className="flex items-center gap-2 text-xl text-white">

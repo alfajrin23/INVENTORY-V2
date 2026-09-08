@@ -85,10 +85,11 @@ export function HistoryPage() {
     const product = products.find((item) => item.barcode === value.trim())
     if (product) {
       chooseProduct(product)
-    }
+    } else { setSelectedProduct(null) }
   }
 
   const handleSubmit = async () => {
+    if (saving) return
     const product = selectedProduct ?? products.find((item) => item.barcode === barcode.trim())
     const amount = Number(quantity)
 
@@ -97,7 +98,7 @@ export function HistoryPage() {
       return
     }
 
-    if (!Number.isFinite(amount) || amount < 1) {
+    if (!Number.isSafeInteger(amount) || amount < 1) {
       showToast('Jumlah harus minimal 1', 'error')
       return
     }
@@ -223,7 +224,7 @@ export function HistoryPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-white">{item.namaBarang}</p>
-                      <p className="text-sm text-white/52">{item.brand}</p>
+                      <p className="text-sm text-white/52">{item.brand} ? Qty {item.jumlah}</p>
                     </div>
                     <Badge className={item.kategori === 'keluar' ? 'bg-rose-300/14 text-rose-100' : 'bg-emerald-300/14 text-emerald-100'}>
                       {item.kategori}
@@ -259,7 +260,7 @@ export function HistoryPage() {
         )}
       </GlassPanel>
 
-      <div className="fixed bottom-24 right-4 z-40 flex flex-col gap-2 lg:bottom-7 lg:right-28">
+      <div className="flex gap-2 lg:hidden">
         <Button type="button" onClick={() => openTransactionForm('masuk')} className="bg-emerald-300 text-slate-950 shadow-xl hover:bg-emerald-200 lg:hidden">
           <ArrowDownCircle className="size-4" />
           Masuk
@@ -303,6 +304,7 @@ export function HistoryPage() {
                 onChange={(event) => {
                   setProductQuery(event.target.value)
                   setSelectedProduct(null)
+                  setBarcode('')
                 }}
                 className="border-white/12 bg-white/8 text-white"
               />

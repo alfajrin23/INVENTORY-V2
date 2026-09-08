@@ -283,3 +283,69 @@ html.light body {
     radial-gradient(circle at 84% 16%, rgba(0, 201, 167, 0.14), transparent 26rem),
     linear-gradient(135deg, #eef7fb 0%, #f8fbff 52%, #edf8f4 100%);
 }
+
+
+/* Mobile layout: keep all content reachable with the keyboard and safe areas. */
+html { scroll-padding-bottom: 8rem; }
+body { min-width: 320px; min-height: 100dvh; }
+main, section, [data-glass-panel], [data-slot="dialog-content"] { min-width: 0; }
+[data-slot="dialog-overlay"] { z-index: 60; }
+[data-slot="dialog-content"] { z-index: 61; max-height: 92dvh; overflow-y: auto; overscroll-behavior: contain; }
+[data-slot="dialog-header"] { padding-right: 1.5rem; }
+[data-slot="dialog-footer"] { flex-wrap: wrap; }
+.voice-sheet { max-height: 90dvh; }
+html.light [data-slot="dialog-content"] {
+  color-scheme: dark;
+  --background: #172033; --foreground: #f1f5f9; --input: #334155;
+  --muted: #27344b; --muted-foreground: #b3c3d8; --border: #334155;
+  --primary: #6ee7b7; --primary-foreground: #10212c;
+  --accent: #1e3e48; --accent-foreground: #fff; --secondary: #27344b;
+}
+.voice-pulse { animation: voice-pulse 1.2s ease-in-out infinite; }
+@keyframes voice-pulse { 50% { opacity: .45; transform: scale(1.1); } }
+@media (max-width: 1023px) {
+  header { padding-top: max(.75rem, env(safe-area-inset-top)); }
+  main { padding: 1rem .875rem calc(8rem + env(safe-area-inset-bottom)); }
+  main h1 { font-size: 1.65rem; line-height: 1.2; overflow-wrap: anywhere; }
+  main h2, main p { overflow-wrap: anywhere; }
+  input, select, textarea, [data-slot="input"] { font-size: 16px !important; min-width: 0; }
+  button, [role="combobox"] { min-height: 44px; }
+  button:has(>svg:only-child) { min-width: 44px; }
+  [data-slot="checkbox"] { min-width: 24px; min-height: 24px; }
+  [data-slot="dialog-content"] { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .voice-sheet { top: auto; bottom: 0; left: 0; transform: none; translate: none; width: 100%; max-width: none; border-radius: 1.5rem 1.5rem 0 0; }
+  .mobile-bottom-nav { bottom: max(.75rem, env(safe-area-inset-bottom)); border-radius: 2rem; grid-template-columns: 1fr 1fr 64px 1fr 1fr; }
+  [data-glass-panel] { backdrop-filter: none; box-shadow: 0 5px 20px #00000012; border-radius: 1rem; }
+  .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  .metric-card { padding: .875rem; min-height: 130px; }
+  .metric-card .metric-layout { display: block; }
+  .metric-card .metric-icon { display: none; }
+  .metric-card .metric-value { font-size: clamp(1rem, 4vw, 1.5rem); overflow-wrap: anywhere; }
+  .metric-card .metric-detail { font-size: .75rem; }
+  .report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+  .report-grid [data-glass-panel] { padding: 1rem; height: 100%; min-height: 170px; }
+  .report-grid h2 { font-size: 1rem; margin-top: .75rem; }
+  .report-grid p { font-size: .75rem; }
+  .report-grid .report-link { margin-top: .75rem; font-size: .75rem; }
+  html.light body { background: #e0f2f1; }
+  html.light main { color: #123c3a; }
+  html.light main [data-glass-panel] { background: #ffffff; border-color: #cae6df; }
+  html.light main [class*="text-white"], html.light main [class*="text-cyan-"], html.light main [class*="text-emerald-"], html.light main [class*="text-amber-"], html.light main [class*="text-violet-"] { color: #234e4b; }
+  html.light main [class*="bg-white/"] { background-color: #eff8f5; border-color: #d1e7e2; }
+  html.light main input::placeholder { color: #627f7d; }
+  html.light header, html.light .mobile-bottom-nav { background: #f5fffcf5; color: #164e49; border-color: #8fbeb6; }
+  html.light header [class*="text-white/"], html.light .mobile-bottom-nav a { color: #426863; }
+  html.light header [aria-label="Ringkasan WhatsApp"] { color: #9f1239; }
+  html.light .mobile-bottom-nav a[aria-current="page"] { background: #c5eee2; color: #115e59; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* Keep chart labels readable when the user chooses the light theme. */
+html.light main [data-glass-panel] { background: #fffffff0; border-color: #cae6df; }
+html.light main [class*="text-white"], html.light main [class*="text-cyan-"], html.light main [class*="text-emerald-"], html.light main [class*="text-amber-"], html.light main [class*="text-violet-"] { color: #234e4b; }
+html.light main [class*="bg-white/"] { background-color: #eff8f5; border-color: #d1e7e2; }
+html.light main input::placeholder { color: #627f7d; }
+html.light .recharts-cartesian-axis-tick text { fill: #426863; }
+html.light .recharts-cartesian-grid line { stroke: #c5ded7; }

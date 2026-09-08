@@ -44,6 +44,7 @@ export function ScannerDialog({
     return `barcode-scanner-${token}`
   })
   const scannerRef = useRef<Html5QrcodeInstance | null>(null)
+  const resolverRef = useRef<(barcode: string) => void>(() => {})
   const handledBarcodeRef = useRef('')
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'active' | 'error'>('idle')
   const [manualBarcode, setManualBarcode] = useState('')
@@ -61,13 +62,14 @@ export function ScannerDialog({
 
   const resolveBarcode = useCallback((barcode: string) => {
     const normalized = barcode.trim()
-    if (!normalized) {
+    if (!normalized || handledBarcodeRef.current === normalized) {
       return
     }
 
     onRawBarcode?.(normalized)
     const product = products.find((item) => item.barcode === normalized)
     if (product) {
+      handledBarcodeRef.current = normalized
       setMissingBarcode('')
       navigator.vibrate?.(160)
       onDetected(product)
@@ -76,6 +78,8 @@ export function ScannerDialog({
 
     setMissingBarcode(normalized)
   }, [onDetected, onRawBarcode, products])
+
+  useEffect(() => { resolverRef.current = resolveBarcode }, [resolveBarcode])
 
   useEffect(() => {
     if (!open) {
@@ -86,7 +90,8 @@ export function ScannerDialog({
     setCameraStatus('idle')
     let cancelled = false
 
-    window.setTimeout(async () => {
+    const timer = window.setTimeout(async () => {
+      try {
       if (cancelled) {
         return
       }
@@ -114,40 +119,40 @@ export function ScannerDialog({
           { facingMode: 'environment' },
           {
             fps: 10,
-            qrbox: { width: 260, height: 160 },
+            qrbox: (width, height) => ({ width: Math.min(260, Math.floor(width * 0.8)), height: Math.min(160, Math.floor(height * 0.6)) }),
           },
           (decodedText) => {
             if (handledBarcodeRef.current === decodedText) {
               return
             }
 
-            handledBarcodeRef.current = decodedText
-            resolveBarcode(decodedText)
+            resolverRef.current(decodedText)
           },
           undefined,
         )
-        .then(() => setCameraStatus('active'))
-        .catch(() => setCameraStatus('error'))
+        .then(async () => {
+          if (cancelled) { await scanner.stop(); scanner.clear(); return }
+          setCameraStatus('active')
+        })
+        .catch(() => { if (!cancelled) setCameraStatus('error') })
+      } catch { if (!cancelled) setCameraStatus('error') }
     }, 220)
 
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
       const instance = scannerRef.current
       scannerRef.current = null
       if (instance) {
-        instance
-          .stop()
-          .catch(() => undefined)
-          .finally(() => {
-            try {
-              instance.clear()
-            } catch {
-              return
-            }
-          })
+        void (async () => {
+          try {
+            if (instance.isScanning) await instance.stop()
+            instance.clear()
+          } catch { /* Camera startup may still be pending; its completion handler also stops it. */ }
+        })()
       }
     }
-  }, [open, resolveBarcode, scannerId])
+  }, [open, scannerId])
 
   const submitManualBarcode = () => {
     resolveBarcode(manualBarcode)
@@ -155,8 +160,8 @@ export function ScannerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-hidden border-white/12 bg-[#111827]/95 p-0 text-white shadow-2xl sm:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1.2fr)_24rem] max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl">
-        <div className="relative min-h-[420px] overflow-hidden bg-black lg:min-h-[560px]">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto border-white/12 bg-[#111827]/95 p-0 text-white shadow-2xl sm:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1.2fr)_24rem] max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl">
+        <div className="relative min-h-[180px] h-[28dvh] lg:h-auto overflow-hidden bg-black lg:min-h-[560px]">
           <div id={scannerId} className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover" />
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.65),transparent_18%,transparent_82%,rgba(0,0,0,0.65))]" />
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-44 w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-cyan-300/70 shadow-[0_0_42px_rgba(0,210,255,0.22)]">
@@ -170,24 +175,25 @@ export function ScannerDialog({
             type="button"
             variant="ghost"
             size="icon-lg"
-            onClick={() => onOpenChange(false)}
+            aria-label="Tutup scanner" onClick={() => onOpenChange(false)}
             className="absolute right-4 top-4 rounded-full bg-black/35 text-white hover:bg-white/15"
           >
             <X className="size-5" />
           </Button>
         </div>
 
-        <div className="flex max-h-[92vh] flex-col gap-5 overflow-y-auto p-5 lg:p-6">
+        <div className="flex lg:max-h-[92vh] flex-col gap-5 overflow-y-auto p-5 lg:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl text-white">
               <Barcode className="size-5 text-cyan-200" />
               {title}
             </DialogTitle>
             <DialogDescription className="text-white/58">
-              Produk otomatis masuk ketika barcode cocok dengan database aktif.
+              Pilih barang dari barcode atau pencarian. Transaksi tetap perlu dikonfirmasi.
             </DialogDescription>
           </DialogHeader>
 
+          {cameraStatus === 'error' && <p role="status" className="text-amber-100">Kamera tidak tersedia atau izin ditolak. Gunakan barcode manual atau pencarian produk.</p>}
           <div className="space-y-2">
             <Label htmlFor="manualBarcode" className="text-white/72">
               Input barcode manual
@@ -208,7 +214,7 @@ export function ScannerDialog({
                 )}
                 placeholder="8991001000011"
               />
-              <Button type="button" onClick={submitManualBarcode} className="h-11 bg-cyan-300 text-slate-950">
+              <Button type="button" aria-label="Cari barcode" onClick={submitManualBarcode} className="h-11 bg-cyan-300 text-slate-950">
                 <Search className="size-4" />
               </Button>
             </div>

@@ -28,12 +28,15 @@ const reportCards = [
     accent: 'cyan',
   },
   {
-    title: 'Laporan Pendapatan',
+    title: 'Pendapatan Harian',
     detail: 'Harian, mingguan, bulanan, tahunan',
-    path: routes.revenueYear,
+    path: routes.revenueDay,
     icon: BarChart3,
     accent: 'violet',
   },
+  { title: 'Pendapatan Mingguan', detail: 'Ringkasan per minggu', path: routes.revenueWeek, icon: BarChart3, accent: 'violet' },
+  { title: 'Pendapatan Bulanan', detail: 'Ringkasan per bulan', path: routes.revenueMonth, icon: BarChart3, accent: 'amber' },
+  { title: 'Pendapatan Tahunan', detail: 'Ringkasan per tahun', path: routes.revenueYear, icon: BarChart3, accent: 'cyan' },
 ] as const
 
 export function ReportsHubPage() {
@@ -44,7 +47,7 @@ export function ReportsHubPage() {
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Laporan Data Toko</h1>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="report-grid grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {reportCards.map((card) => {
           const Icon = card.icon
           return (
@@ -66,7 +69,7 @@ export function ReportsHubPage() {
                 </div>
                 <h2 className="mt-5 text-xl font-semibold text-white">{card.title}</h2>
                 <p className="mt-2 min-h-10 text-sm text-white/56">{card.detail}</p>
-                <div className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-cyan-100">
+                <div className="report-link mt-6 inline-flex items-center gap-2 text-sm font-medium text-cyan-100">
                   Buka laporan
                   <ArrowRight className="size-4 transition group-hover:translate-x-1" />
                 </div>

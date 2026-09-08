@@ -64,6 +64,7 @@ export function ProfileSettingsPage() {
 
   const handleProfilePhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
+    if (file && (!file.type.startsWith('image/') || file.size > 1024 * 1024)) { showToast('Gunakan gambar maksimal 1 MB', 'error'); return }
     if (!file) {
       return
     }
@@ -77,6 +78,7 @@ export function ProfileSettingsPage() {
 
   const handleStorePhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
+    if (file && (!file.type.startsWith('image/') || file.size > 1024 * 1024)) { showToast('Gunakan gambar maksimal 1 MB', 'error'); return }
     if (!file) {
       return
     }
@@ -118,6 +120,7 @@ export function ProfileSettingsPage() {
   }
 
   const saveStore = async () => {
+    if (saving) return
     const validation = validateStore()
     if (validation) {
       showToast(validation, 'error')
@@ -138,7 +141,8 @@ export function ProfileSettingsPage() {
         showToast('Toko diperbarui', 'success')
       } else {
         const created = await addStore(payload)
-        await setActiveStore(created.id)
+        // addStore already selects and loads the new store.
+        void created
         showToast('Toko baru dibuat', 'success')
       }
 
@@ -152,9 +156,11 @@ export function ProfileSettingsPage() {
   }
 
   const activateStore = async (store: StoreRecord) => {
-    await setActiveStore(store.id)
-    showToast(`${store.name} aktif`, 'success')
-    navigate(routes.dashboard)
+    try {
+      await setActiveStore(store.id)
+      showToast(`${store.name} aktif`, 'success')
+      navigate(routes.dashboard)
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Toko gagal dipilih', 'error') }
   }
 
   const removeStore = async (store: StoreRecord) => {
@@ -163,8 +169,8 @@ export function ProfileSettingsPage() {
       return
     }
 
-    await deleteStore(store.id)
-    showToast('Toko dihapus', 'success')
+    try { await deleteStore(store.id); showToast('Toko dihapus', 'success') }
+    catch (e) { showToast(e instanceof Error ? e.message : 'Toko gagal dihapus', 'error') }
   }
 
   if (error) {
@@ -254,10 +260,10 @@ export function ProfileSettingsPage() {
                       </p>
                     </button>
                     <div className="flex gap-1">
-                      <Button type="button" variant="outline" size="icon-sm" onClick={() => openEditStore(store)}>
+                      <Button type="button" variant="outline" size="icon-sm" aria-label={`Edit toko ${store.name}`} onClick={() => openEditStore(store)}>
                         <Edit3 className="size-4" />
                       </Button>
-                      <Button type="button" variant="ghost" size="icon-sm" onClick={() => void removeStore(store)} className="text-rose-200">
+                      <Button type="button" variant="ghost" size="icon-sm" aria-label={`Hapus toko ${store.name}`} onClick={() => void removeStore(store)} className="text-rose-200">
                         <Trash2 className="size-4" />
                       </Button>
                     </div>

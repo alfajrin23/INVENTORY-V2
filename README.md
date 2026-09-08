@@ -1,35 +1,28 @@
-# ABElektronik Web Stock Management
+# ABElektronik Inventory V2
 
-React + Tailwind CSS + shadcn/ui inventory app for multi-store stock management.
+React + Vite + TypeScript inventory dengan Supabase, transaksi PostgreSQL atomic, barcode scanner, perintah suara Bahasa Indonesia, multi-store, laporan, PDF, dan tampilan mobile.
 
-## Stack
+Mulai dari [SUPABASE_SETUP.md](SUPABASE_SETUP.md) untuk membuat database, menjalankan migration, membuat akun, mengisi `.env.local`, migrasi data Firebase, dan deploy Vercel.
 
-- React, Vite, TypeScript
-- Tailwind CSS v4
-- shadcn/ui + Radix primitives
-- Framer Motion
-- Lucide React
-- Recharts
-- Firebase Firestore, Storage, Authentication SDK
-- html5-qrcode barcode scanner
-- JsBarcode barcode generator
-- jsPDF receipt and report export
-
-## Run
-
-```bash
+```powershell
 npm install
 npm run dev
 ```
 
-## Firebase
+Untuk demo lokal, isi `VITE_DEMO_MODE=true` di `.env.local`. Production menggunakan Supabase dengan login dan RLS; demo tidak tersedia pada production build.
 
-Copy `.env.example` to `.env` and fill the Firebase values. If the required values are empty, the app runs in demo mode with localStorage seed data.
+```powershell
+npm run build
+npm run lint
+npm run test:db
+npx playwright install chromium
+npm test
+```
 
-Main collections used by the app:
+- [Audit struktur dan risiko](AUDIT.md)
+- [Laporan implementasi dan hasil verifikasi](IMPLEMENTATION_REPORT.md)
+- [Setup lengkap](SUPABASE_SETUP.md)
+- SQL migration: `supabase/migrations/`
+- Konversi backup offline: `scripts/prepare-firebase-import.mjs`
 
-- `stores`
-- `products`
-- `history`
-
-The React routes keep the old page names, for example `/databarang.html`, `/history.html`, and `/laporanpendapatan.html`.
+Rute legacy seperti `/databarang.html`, `/history.html`, dan `/laporanpendapatan.html` dipertahankan. Tidak ada Firebase runtime SDK. Voice menggunakan SpeechRecognition browser dan parser lokal; setiap transaksi wajib dikonfirmasi. Browser tanpa SpeechRecognition dapat memakai input teks atau dikte keyboard.

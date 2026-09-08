@@ -1,23 +1,6 @@
-import {
-  Timestamp,
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  increment,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  writeBatch,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from 'firebase/firestore'
-
 import { createSeedData } from '@/data/seed'
-import { db, firebaseReady } from '@/lib/firebase'
+import { demoEnabled } from '@/lib/supabase'
+import { supabaseRepository } from '@/lib/supabase-repository'
 import type {
   HistoryItem,
   InventorySnapshot,
@@ -26,6 +9,7 @@ import type {
   StoreInput,
   StoreRecord,
   TransactionInput,
+  TransactionResult,
 } from '@/lib/types'
 
 type LocalData = {
@@ -35,7 +19,7 @@ type LocalData = {
 }
 
 export type InventoryRepository = {
-  mode: 'firebase' | 'demo'
+  mode: 'supabase' | 'demo'
   getSnapshot: () => Promise<InventorySnapshot>
   fetchStores: () => Promise<StoreRecord[]>
   setActiveStore: (storeId: string) => Promise<void>
@@ -43,10 +27,9 @@ export type InventoryRepository = {
   updateStore: (id: string, store: StoreInput) => Promise<void>
   deleteStore: (id: string) => Promise<void>
   addProduct: (product: ProductInput) => Promise<Product>
-  updateProduct: (id: string, product: ProductInput) => Promise<void>
+  updateProduct: (id: string, product: ProductInput, expectedStock: number) => Promise<TransactionResult>
   deleteProduct: (id: string) => Promise<void>
-  addHistoryItem: (item: Omit<HistoryItem, 'id'>) => Promise<HistoryItem>
-  processTransaction: (input: TransactionInput) => Promise<HistoryItem[]>
+  processTransaction: (input: TransactionInput) => Promise<TransactionResult>
 }
 
 const STORAGE_KEY = 'ab-elektronik-v2-data'
@@ -66,23 +49,6 @@ function uniqueId(prefix: string) {
       : Math.random().toString(36).slice(2, 10)
 
   return `${prefix}-${Date.now().toString(36)}-${random}`
-}
-
-function normalizeDate(value: unknown) {
-  if (value instanceof Timestamp) {
-    return value.toDate().toISOString()
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString()
-  }
-
-  if (typeof value === 'string') {
-    const date = new Date(value)
-    return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString()
-  }
-
-  return new Date().toISOString()
 }
 
 function hydrateStoreStorage(store: StoreRecord | null) {
@@ -127,10 +93,7 @@ function readLocalData(): LocalData {
     }
     return data
   } catch {
-    const seed = createSeedData()
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seed))
-    hydrateStoreStorage(seed.stores[0] ?? null)
-    return seed
+    throw new Error('Data demo tidak dapat dibaca. Backup localStorage sebelum memperbaikinya.')
   }
 }
 
@@ -211,24 +174,23 @@ const localRepository: InventoryRepository = {
     writeLocalData(data)
     return created
   },
-  async updateProduct(id, product) {
+  async updateProduct(id, product, expectedStock) {
     const data = readLocalData()
+    const old = data.products.find(item => item.id === id)
+    if (!old || old.stok !== expectedStock) throw new Error('Stok berubah. Muat ulang produk sebelum mengedit.')
+    const delta = product.stok - old.stok
+    const history: HistoryItem[] = delta ? [{ ...old, id: uniqueId('hst'), tanggal: new Date().toISOString(), kategori: delta > 0 ? 'masuk' : 'keluar', jumlah: Math.abs(delta), keterangan: 'Koreksi stok melalui edit produk' }] : []
+    data.history = [...history, ...data.history]
     data.products = data.products.map((item) =>
       item.id === id ? { ...item, ...product, updatedAt: new Date().toISOString() } : item,
     )
     writeLocalData(data)
+    return { products: data.products.filter(item => item.id === id), history }
   },
   async deleteProduct(id) {
     const data = readLocalData()
     data.products = data.products.filter((product) => product.id !== id)
     writeLocalData(data)
-  },
-  async addHistoryItem(item) {
-    const data = readLocalData()
-    const created: HistoryItem = { ...item, id: uniqueId('hst') }
-    data.history = [created, ...data.history]
-    writeLocalData(data)
-    return created
   },
   async processTransaction(input) {
     const data = readLocalData()
@@ -271,231 +233,11 @@ const localRepository: InventoryRepository = {
 
     data.history = [...createdItems, ...data.history]
     writeLocalData(data)
-    return createdItems
+    return { history: createdItems, products: data.products.filter(p => input.items.some(i => i.product.id === p.id)) }
   },
 }
 
-function assertDb() {
-  if (!db) {
-    throw new Error('Firebase belum dikonfigurasi')
-  }
-
-  return db
-}
-
-function storeFromDoc(snapshot: QueryDocumentSnapshot<DocumentData>): StoreRecord {
-  const data = snapshot.data()
-  return {
-    id: snapshot.id,
-    name: String(data.name ?? data.storeName ?? 'ABElektronik'),
-    address: String(data.address ?? data.storeAddress ?? ''),
-    addressLink: String(data.addressLink ?? ''),
-    photo: typeof data.photo === 'string' ? data.photo : undefined,
-    createdAt: normalizeDate(data.createdAt),
-    updatedAt: data.updatedAt ? normalizeDate(data.updatedAt) : undefined,
-  }
-}
-
-function productFromDoc(snapshot: QueryDocumentSnapshot<DocumentData>): Product {
-  const data = snapshot.data()
-  return {
-    id: snapshot.id,
-    namaBarang: String(data.namaBarang ?? ''),
-    brand: String(data.brand ?? ''),
-    harga: Number(data.harga ?? 0),
-    stok: Number(data.stok ?? 0),
-    barcode: String(data.barcode ?? ''),
-    storeId: String(data.storeId ?? ''),
-    createdAt: normalizeDate(data.createdAt),
-    updatedAt: data.updatedAt ? normalizeDate(data.updatedAt) : undefined,
-  }
-}
-
-function historyFromDoc(snapshot: QueryDocumentSnapshot<DocumentData>): HistoryItem {
-  const data = snapshot.data()
-  return {
-    id: snapshot.id,
-    barcode: String(data.barcode ?? ''),
-    tanggal: normalizeDate(data.tanggal),
-    namaBarang: String(data.namaBarang ?? ''),
-    brand: String(data.brand ?? ''),
-    kategori: data.kategori === 'masuk' ? 'masuk' : 'keluar',
-    jumlah: Number(data.jumlah ?? 0),
-    harga: Number(data.harga ?? 0),
-    keterangan: typeof data.keterangan === 'string' ? data.keterangan : undefined,
-    storeId: String(data.storeId ?? ''),
-    oleh: typeof data.oleh === 'string' ? data.oleh : undefined,
-  }
-}
-
-async function getFirebaseStores() {
-  const database = assertDb()
-  const snapshots = await getDocs(query(collection(database, 'stores'), orderBy('createdAt', 'desc')))
-  return snapshots.docs.map(storeFromDoc)
-}
-
-const firebaseRepository: InventoryRepository = {
-  mode: 'firebase',
-  async getSnapshot() {
-    const database = assertDb()
-    const stores = await getFirebaseStores()
-    const activeStoreId = getStoredActiveStoreId(stores)
-    const activeStore = stores.find((store) => store.id === activeStoreId) ?? stores[0] ?? null
-    hydrateStoreStorage(activeStore)
-
-    if (!activeStore) {
-      return {
-        stores,
-        activeStore: null,
-        products: [],
-        history: [],
-      }
-    }
-
-    const productsSnapshot = await getDocs(
-      query(collection(database, 'products'), where('storeId', '==', activeStore.id), orderBy('brand')),
-    )
-    const historySnapshot = await getDocs(
-      query(collection(database, 'history'), where('storeId', '==', activeStore.id), orderBy('tanggal', 'desc')),
-    )
-
-    return {
-      stores,
-      activeStore,
-      products: productsSnapshot.docs.map(productFromDoc),
-      history: historySnapshot.docs.map(historyFromDoc),
-    }
-  },
-  async fetchStores() {
-    return getFirebaseStores()
-  },
-  async setActiveStore(storeId) {
-    const stores = await getFirebaseStores()
-    const store = stores.find((item) => item.id === storeId) ?? null
-    hydrateStoreStorage(store)
-  },
-  async addStore(store) {
-    const database = assertDb()
-    const created = await addDoc(collection(database, 'stores'), {
-      ...store,
-      createdAt: serverTimestamp(),
-    })
-
-    const storeRecord: StoreRecord = {
-      ...store,
-      id: created.id,
-      createdAt: new Date().toISOString(),
-    }
-    hydrateStoreStorage(storeRecord)
-    return storeRecord
-  },
-  async updateStore(id, store) {
-    const database = assertDb()
-    await updateDoc(doc(database, 'stores', id), {
-      ...store,
-      updatedAt: serverTimestamp(),
-    })
-  },
-  async deleteStore(id) {
-    const database = assertDb()
-    const productsSnapshot = await getDocs(query(collection(database, 'products'), where('storeId', '==', id)))
-    const historySnapshot = await getDocs(query(collection(database, 'history'), where('storeId', '==', id)))
-    const batch = writeBatch(database)
-
-    productsSnapshot.docs.forEach((item) => batch.delete(item.ref))
-    historySnapshot.docs.forEach((item) => batch.delete(item.ref))
-    batch.delete(doc(database, 'stores', id))
-    await batch.commit()
-  },
-  async addProduct(product) {
-    const database = assertDb()
-    const created = await addDoc(collection(database, 'products'), {
-      ...product,
-      createdAt: serverTimestamp(),
-    })
-
-    return {
-      ...product,
-      id: created.id,
-      createdAt: new Date().toISOString(),
-    }
-  },
-  async updateProduct(id, product) {
-    const database = assertDb()
-    await updateDoc(doc(database, 'products', id), {
-      ...product,
-      updatedAt: serverTimestamp(),
-    })
-  },
-  async deleteProduct(id) {
-    const database = assertDb()
-    await deleteDoc(doc(database, 'products', id))
-  },
-  async addHistoryItem(item) {
-    const database = assertDb()
-    const created = await addDoc(collection(database, 'history'), {
-      ...item,
-      tanggal: Timestamp.fromDate(new Date(item.tanggal)),
-      createdAt: serverTimestamp(),
-    })
-
-    return {
-      ...item,
-      id: created.id,
-    }
-  },
-  async processTransaction(input) {
-    const database = assertDb()
-    const batch = writeBatch(database)
-    const now = input.date ? new Date(input.date) : new Date()
-    const createdItems: HistoryItem[] = []
-
-    input.items.forEach((cartItem) => {
-      const delta = input.category === 'keluar' ? -cartItem.quantity : cartItem.quantity
-      if (cartItem.product.stok + delta < 0) {
-        throw new Error(`Stok ${cartItem.product.namaBarang} tidak cukup`)
-      }
-
-      const productRef = doc(database, 'products', cartItem.product.id)
-      const historyRef = doc(collection(database, 'history'))
-      batch.update(productRef, {
-        stok: increment(delta),
-        updatedAt: serverTimestamp(),
-      })
-      batch.set(historyRef, {
-        barcode: cartItem.product.barcode,
-        tanggal: Timestamp.fromDate(now),
-        namaBarang: cartItem.product.namaBarang,
-        brand: cartItem.product.brand,
-        kategori: input.category,
-        jumlah: cartItem.quantity,
-        harga: cartItem.product.harga,
-        keterangan: input.note || (input.category === 'keluar' ? 'Penjualan' : 'Restock'),
-        storeId: cartItem.product.storeId,
-        oleh: input.operator || 'Kasir',
-        createdAt: serverTimestamp(),
-      })
-
-      createdItems.push({
-        id: historyRef.id,
-        barcode: cartItem.product.barcode,
-        tanggal: now.toISOString(),
-        namaBarang: cartItem.product.namaBarang,
-        brand: cartItem.product.brand,
-        kategori: input.category,
-        jumlah: cartItem.quantity,
-        harga: cartItem.product.harga,
-        keterangan: input.note || (input.category === 'keluar' ? 'Penjualan' : 'Restock'),
-        storeId: cartItem.product.storeId,
-        oleh: input.operator || 'Kasir',
-      })
-    })
-
-    await batch.commit()
-    return createdItems
-  },
-}
 
 export function getInventoryRepository(): InventoryRepository {
-  return firebaseReady ? firebaseRepository : localRepository
+  return demoEnabled ? localRepository : supabaseRepository
 }

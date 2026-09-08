@@ -3,6 +3,7 @@ import {
   ChevronDown,
   MapPin,
   Moon,
+  Mic,
   Power,
   ScanLine,
   Search,
@@ -31,6 +32,7 @@ import { mobileNavigation, navigationItems, routes } from '@/lib/navigation'
 import { cn } from '@/lib/utils'
 
 function isActive(currentPath: string, targetPath: string) {
+  if (targetPath === routes.reports && Object.values(routes).filter(p => /laporan|pendapatan/.test(p)).includes(currentPath)) return true
   if (targetPath === routes.dashboard) {
     return currentPath === routes.dashboard
   }
@@ -44,12 +46,14 @@ export function AppShell() {
   const { activeStore, stores, products, history, mode, setActiveStore } = useInventory()
   const { showToast } = useToast()
   const [scanOpen, setScanOpen] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window === 'undefined') {
       return 'dark'
     }
 
-    return localStorage.getItem('theme') === 'light' ? 'light' : 'dark'
+    const stored = localStorage.getItem('theme')
+    return stored === 'light' || (!stored && window.matchMedia('(max-width: 1023px)').matches) ? 'light' : 'dark'
   })
   const [search, setSearch] = useState('')
   const profilePhoto = typeof window !== 'undefined' ? localStorage.getItem('profilePhoto') : ''
@@ -120,8 +124,8 @@ export function AppShell() {
           <div className="rounded-xl border border-white/10 bg-white/[0.05] p-3">
             <div className="flex items-center justify-between">
               <p className="text-xs text-white/52">Mode data</p>
-              <Badge className={cn(mode === 'firebase' ? 'bg-emerald-300/18 text-emerald-100' : 'bg-amber-300/18 text-amber-100')}>
-                {mode === 'firebase' ? 'Firebase' : 'Demo'}
+              <Badge className={cn(mode === 'supabase' ? 'bg-emerald-300/18 text-emerald-100' : 'bg-amber-300/18 text-amber-100')}>
+                {mode === 'supabase' ? 'Supabase' : 'Demo'}
               </Badge>
             </div>
             <p className="mt-2 text-sm font-medium text-white">{activeStore?.name ?? 'Belum ada toko'}</p>
@@ -141,7 +145,7 @@ export function AppShell() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate(routes.profile)}
+            aria-label="Profil toko" onClick={() => navigate(routes.profile)}
             className="rounded-full outline-none ring-cyan-200/40 transition hover:ring-4"
           >
             <Avatar className="size-10">
@@ -194,7 +198,7 @@ export function AppShell() {
           </div>
 
           <div className="hidden min-w-64 lg:block">
-            <Select value={activeStore?.id ?? ''} onValueChange={(value) => void setActiveStore(value)}>
+            <Select value={activeStore?.id ?? ''} onValueChange={(value) => void setActiveStore(value).catch(e => showToast(e.message, 'error'))}>
               <SelectTrigger className="h-11 border-white/12 bg-white/[0.07] text-white">
                 <SelectValue placeholder="Pilih toko" />
               </SelectTrigger>
@@ -214,7 +218,7 @@ export function AppShell() {
                 type="button"
                 variant="outline"
                 size="icon-lg"
-                onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+                aria-label="Ganti tema" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
                 className="hidden border-white/12 bg-white/[0.07] text-white hover:bg-white/12 sm:inline-flex"
               >
                 {theme === 'dark' ? <Moon className="size-4" /> : <Sun className="size-4" />}
@@ -232,6 +236,7 @@ export function AppShell() {
             <Bell className="size-4" />
           </Button>
 
+          <Button aria-label="Buka scanner" variant="outline" size="icon-lg" onClick={() => setScanOpen(true)} className="lg:hidden"><ScanLine /></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -244,7 +249,7 @@ export function AppShell() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate(routes.profile)}>Profil toko</DropdownMenuItem>
+              <DropdownMenuItem aria-label="Profil toko" onClick={() => navigate(routes.profile)}>Profil toko</DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate(routes.settings)}>Pengaturan</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -253,7 +258,7 @@ export function AppShell() {
             type="button"
             variant="outline"
             size="icon-lg"
-            onClick={handleShutdown}
+            aria-label="Ringkasan WhatsApp" onClick={handleShutdown}
             className="border-rose-300/25 bg-rose-400/10 text-rose-100 hover:bg-rose-400/18"
           >
             <Power className="size-4" />
@@ -261,20 +266,21 @@ export function AppShell() {
         </div>
       </header>
 
+      <Button aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)} className="fixed bottom-7 right-36 z-40 hidden h-[52px] bg-teal-700 text-white lg:inline-flex"><Mic />Voice AI</Button>
       <main className="px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_1fr_72px_1fr_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
+      <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_1fr_72px_1fr_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
         {mobileNavigation.slice(0, 2).map((item) => (
           <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />
         ))}
         <button
           type="button"
-          onClick={() => setScanOpen(true)}
-          className="-mt-10 flex size-16 items-center justify-center justify-self-center rounded-3xl bg-gradient-to-br from-cyan-300 to-emerald-300 text-slate-950 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition active:translate-y-1"
+          aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)}
+          className="-mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition active:translate-y-1"
         >
-          <ScanLine className="size-7" />
+          <Mic className="size-7" />
         </button>
         {mobileNavigation.slice(2).map((item) => (
           <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />
@@ -290,7 +296,7 @@ export function AppShell() {
         Scan
       </Button>
 
-      <TransactionWorkflow scannerOpen={scanOpen} onScannerOpenChange={setScanOpen} />
+      <TransactionWorkflow key={activeStore?.id} scannerOpen={scanOpen} onScannerOpenChange={setScanOpen} voiceOpen={voiceOpen} onVoiceOpenChange={setVoiceOpen} />
     </div>
   )
 }

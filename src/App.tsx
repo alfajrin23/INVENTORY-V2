@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
+import { AuthGate } from '@/components/auth-gate'
 import { AppShell } from '@/components/layout/app-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { InventoryProvider } from '@/hooks/use-inventory'
@@ -28,7 +29,7 @@ function App() {
     <BrowserRouter>
       <TooltipProvider>
         <ToastProvider>
-          <InventoryProvider>
+          <AuthGate><InventoryProvider>
             <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman</div>}>
               <Routes>
                 <Route element={<AppShell />}>
@@ -50,7 +51,7 @@ function App() {
                 </Route>
               </Routes>
             </Suspense>
-          </InventoryProvider>
+          </InventoryProvider></AuthGate>
         </ToastProvider>
       </TooltipProvider>
     </BrowserRouter>

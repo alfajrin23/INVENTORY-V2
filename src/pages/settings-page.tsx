@@ -11,13 +11,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { demoEnabled, supabase } from '@/lib/supabase'
+import { Link } from 'react-router-dom'
+import { routes } from '@/lib/navigation'
 import { useToast } from '@/hooks/use-toast'
 
 export function SettingsPage() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const { showToast } = useToast()
 
-  const handleExit = () => {
+  const handleExit = async () => {
+    if (supabase && !demoEnabled) {
+      try { const { error } = await supabase.auth.signOut(); if (error) throw error } catch { showToast('Gagal keluar. Coba lagi.', 'error') }
+      return
+    }
     const confirmed = window.confirm('Keluar dari aplikasi?')
     if (!confirmed) {
       return
@@ -37,6 +44,7 @@ export function SettingsPage() {
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Pengaturan</h1>
       </div>
 
+      <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to={routes.profile}>Profil & Toko</Link></Button><Button asChild variant="outline"><Link to={routes.history}>History Barang</Link></Button></div>
       <GlassPanel className="max-w-2xl divide-y divide-white/10 p-2" glow="cyan">
         <button
           type="button"

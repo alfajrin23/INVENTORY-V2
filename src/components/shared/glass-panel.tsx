@@ -17,7 +17,7 @@ const glowClasses = {
 
 export function GlassPanel({ className, glow = 'cyan', children, ...props }: GlassPanelProps) {
   return (
-    <motion.div
+    <motion.div data-glass-panel
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.32, ease: 'easeOut' }}

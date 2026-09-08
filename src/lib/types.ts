@@ -45,7 +45,10 @@ export type ProductInput = Omit<Product, 'id' | 'createdAt' | 'updatedAt'>
 
 export type StoreInput = Omit<StoreRecord, 'id' | 'createdAt' | 'updatedAt'>
 
+export type TransactionResult = { products: Product[]; history: HistoryItem[] }
+
 export type TransactionInput = {
+  requestId?: string
   category: TransactionCategory
   items: CartItem[]
   note?: string

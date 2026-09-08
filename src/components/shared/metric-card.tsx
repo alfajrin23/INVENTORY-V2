@@ -28,7 +28,7 @@ export function MetricCard({ label, value, detail, trend, icon, accent = 'cyan' 
   return (
     <GlassPanel
       glow={accent}
-      className="group relative min-h-36 overflow-hidden p-5"
+      className="metric-card group relative min-h-36 overflow-hidden p-5"
       whileHover={{ y: -4, rotateX: 1.5, rotateY: -1.5 }}
       whileTap={{ scale: 0.98 }}
       style={{ transformPerspective: 1000 }}
@@ -43,15 +43,15 @@ export function MetricCard({ label, value, detail, trend, icon, accent = 'cyan' 
           accent === 'violet' && 'from-violet-300 via-fuchsia-400 to-cyan-400',
         )}
       />
-      <div className="flex items-start justify-between gap-4">
+      <div className="metric-layout flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase text-white/48">{label}</p>
-          <p className="mt-3 font-mono text-2xl font-semibold text-white sm:text-3xl">{value}</p>
-          {detail ? <p className="mt-2 text-sm text-white/58">{detail}</p> : null}
+          <p className="metric-value mt-3 font-mono text-2xl font-semibold text-white sm:text-3xl">{value}</p>
+          {detail ? <p className="metric-detail mt-2 text-sm text-white/58">{detail}</p> : null}
         </div>
         <motion.div
           className={cn(
-            'flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br shadow-inner',
+            'metric-icon flex size-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br shadow-inner',
             accents[accent],
           )}
           whileHover={{ rotate: 8, scale: 1.06 }}

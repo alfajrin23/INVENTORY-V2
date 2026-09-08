@@ -1,5 +1,4 @@
 import JsBarcode from 'jsbarcode'
-import jsPDF from 'jspdf'
 import {
   Barcode,
   Download,
@@ -103,7 +102,8 @@ function downloadBarcodePng(product: Product) {
   link.click()
 }
 
-function downloadBarcodePdf(products: Product[]) {
+async function downloadBarcodePdf(products: Product[]) {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF('p', 'mm', 'a4')
   const columns = 4
   const rows = 8
@@ -147,6 +147,7 @@ export function ProductsPage() {
     deleteProduct,
   } = useInventory()
   const { showToast } = useToast()
+  const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
@@ -206,9 +207,11 @@ export function ProductsPage() {
       return
     }
 
-    await deleteProduct(product.id)
-    setSelectedIds((current) => current.filter((id) => id !== product.id))
-    showToast('Produk dihapus', 'success')
+    try {
+      await deleteProduct(product.id)
+      setSelectedIds((current) => current.filter((id) => id !== product.id))
+      showToast('Produk dihapus', 'success')
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Produk gagal dihapus', 'error') }
   }
 
   const validateForm = () => {
@@ -228,6 +231,8 @@ export function ProductsPage() {
       return 'Harga harus lebih dari 0'
     }
 
+    if (!Number.isSafeInteger(Number(form.stok)) || Number(form.stok) < 0) return 'Stok harus bilangan bulat minimal 0'
+
     if (!form.barcode.trim()) {
       return 'Barcode wajib diisi'
     }
@@ -243,12 +248,15 @@ export function ProductsPage() {
   }
 
   const handleSave = async () => {
+    if (saving) return
     const validation = validateForm()
     if (validation) {
       showToast(validation, 'error')
       return
     }
 
+    setSaving(true)
+    try {
     const payload: ProductInput = {
       namaBarang: form.namaBarang.trim(),
       brand: form.brand.trim(),
@@ -259,7 +267,7 @@ export function ProductsPage() {
     }
 
     if (editingProduct) {
-      await updateProduct(editingProduct.id, payload)
+      await updateProduct(editingProduct.id, payload, editingProduct.stok)
       showToast('Produk diperbarui', 'success')
     } else {
       await addProduct(payload)
@@ -267,6 +275,7 @@ export function ProductsPage() {
     }
 
     setFormOpen(false)
+    } catch (e) { showToast(e instanceof Error ? e.message : 'Produk gagal disimpan', 'error') } finally { setSaving(false) }
   }
 
   const openBarcodePreview = () => {
@@ -375,10 +384,10 @@ export function ProductsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex gap-2">
-                          <Button type="button" variant="outline" size="icon-sm" onClick={() => openEditForm(product)}>
+                          <Button type="button" variant="outline" size="icon-sm" aria-label={`Edit ${product.namaBarang}`} onClick={() => openEditForm(product)}>
                             <Edit3 className="size-4" />
                           </Button>
-                          <Button type="button" variant="ghost" size="icon-sm" onClick={() => void handleDelete(product)} className="text-rose-200">
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Hapus ${product.namaBarang}`} onClick={() => void handleDelete(product)} className="text-rose-200">
                             <Trash2 className="size-4" />
                           </Button>
                         </div>
@@ -400,7 +409,7 @@ export function ProductsPage() {
                       <p className="truncate font-semibold text-white">{product.namaBarang}</p>
                       <p className="text-sm text-white/52">{product.brand}</p>
                     </div>
-                    <Checkbox checked={selectedIds.includes(product.id)} onCheckedChange={() => toggleSelect(product.id)} />
+                    <Checkbox aria-label={`Pilih ${product.namaBarang}`} checked={selectedIds.includes(product.id)} onCheckedChange={() => toggleSelect(product.id)} />
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div>
@@ -414,11 +423,11 @@ export function ProductsPage() {
                   </div>
                   <p className="mt-3 font-mono text-xs text-cyan-100/72">{product.barcode}</p>
                   <div className="mt-4 flex gap-2">
-                    <Button type="button" variant="outline" className="flex-1" onClick={() => openEditForm(product)}>
+                    <Button type="button" variant="outline" className="flex-1" aria-label={`Edit ${product.namaBarang}`} onClick={() => openEditForm(product)}>
                       <Edit3 className="size-4" />
                       Edit
                     </Button>
-                    <Button type="button" variant="ghost" className="text-rose-200" onClick={() => void handleDelete(product)}>
+                    <Button type="button" variant="ghost" className="text-rose-200" aria-label={`Hapus ${product.namaBarang}`} onClick={() => void handleDelete(product)}>
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
@@ -521,7 +530,7 @@ export function ProductsPage() {
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
               Batal
             </Button>
-            <Button type="button" onClick={() => void handleSave()} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+            <Button type="button" disabled={saving} onClick={() => void handleSave()} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
               Simpan
             </Button>
           </DialogFooter>

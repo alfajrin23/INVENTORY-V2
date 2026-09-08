@@ -45,7 +45,7 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="dashboard-metrics grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {loading ? (
           <LoadingGrid rows={4} className="md:col-span-2 xl:col-span-4 xl:grid-cols-4" />
         ) : (
@@ -53,7 +53,7 @@ export function DashboardPage() {
             <MetricCard
               label="Pendapatan Hari Ini"
               value={metrics.todayRevenueLabel}
-              detail="Realtime transaksi keluar"
+              detail="Transaksi keluar tersimpan"
               trend={metrics.revenueTrend}
               icon={<WalletCards className="size-5" />}
               accent="emerald"
@@ -97,7 +97,7 @@ export function DashboardPage() {
               <ComposedChart data={dailyRevenue} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
                 <XAxis dataKey="hari" stroke="rgba(255,255,255,0.55)" tickLine={false} axisLine={false} />
-                <YAxis
+                <YAxis yAxisId="revenue"
                   stroke="rgba(255,255,255,0.55)"
                   tickLine={false}
                   axisLine={false}
@@ -114,9 +114,10 @@ export function DashboardPage() {
                     name === 'pendapatan' ? [formatCurrency(Number(value)), 'Pendapatan'] : [value, 'Transaksi']
                   }
                 />
+                <YAxis yAxisId="transactions" orientation="right" width={28} allowDecimals={false} tickLine={false} axisLine={false} stroke="rgba(255,255,255,0.55)" />
                 <Legend />
-                <Bar dataKey="pendapatan" fill="#00d2ff" radius={[8, 8, 0, 0]} />
-                <Line type="monotone" dataKey="transaksi" stroke="#ffb454" strokeWidth={3} dot={{ r: 4 }} />
+                <Bar yAxisId="revenue" dataKey="pendapatan" fill="#00d2ff" radius={[8, 8, 0, 0]} />
+                <Line yAxisId="transactions" type="monotone" dataKey="transaksi" stroke="#ffb454" strokeWidth={3} dot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
