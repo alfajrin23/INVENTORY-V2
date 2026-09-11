@@ -49,6 +49,13 @@ async function expectFailure(action, message) {
   assert.equal(failed, true, message)
 }
 
+// Authenticated clients may read/insert/delete products, but may not bypass guarded RPC with direct UPDATE.
+assert.equal(
+  await scalar(`select has_table_privilege('authenticated', 'public.products', 'UPDATE')`),
+  false,
+  'authenticated tidak boleh direct UPDATE products',
+)
+
 await asUser(userA)
 const storeResult = await db.query(`
   insert into public.stores(name, address, address_link)
@@ -102,16 +109,32 @@ await db.query(
 assert.equal(Number(await scalar(`select stok from public.products where id = $1`, [panasonic])), 27, 'retry tidak boleh mengurangi stok lagi')
 assert.equal(Number(await scalar(`select count(*) from public.history where request_id = $1`, [requestOut])), historyBeforeRetry, 'retry tidak boleh menambah history')
 
+// Lost-response retry: no explicit timestamp, same logical items in a different order still resolve to one request.
+const requestReordered = 'abababab-abab-4bab-8bab-abababababab'
+const firstOrder = JSON.stringify([{ product_id: panasonic, quantity: 1 }, { product_id: provi, quantity: 1 }])
+const reversedOrder = JSON.stringify([{ product_id: provi, quantity: 1 }, { product_id: panasonic, quantity: 1 }])
+await db.query(
+  `select public.process_inventory_transaction($1::uuid, $2::uuid, 'masuk', $3::jsonb, null, 'Tester', null::timestamptz)`,
+  [requestReordered, storeA, firstOrder],
+)
+await db.query(
+  `select public.process_inventory_transaction($1::uuid, $2::uuid, 'masuk', $3::jsonb, null, 'Tester', null::timestamptz)`,
+  [requestReordered, storeA, reversedOrder],
+)
+assert.equal(Number(await scalar(`select stok from public.products where id = $1`, [panasonic])), 28, 'reordered retry tidak boleh double mutate Panasonic')
+assert.equal(Number(await scalar(`select stok from public.products where id = $1`, [provi])), 2, 'reordered retry tidak boleh double mutate Provi')
+assert.equal(Number(await scalar(`select count(*) from public.history where request_id = $1`, [requestReordered])), 2, 'satu history per product untuk request yang sama')
+
 // Insufficient stock: no partial history/stock mutation.
 const requestFail = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 await expectFailure(
   () => db.query(
     `select public.process_inventory_transaction($1::uuid, $2::uuid, 'keluar', $3::jsonb, null, 'Tester', $4::timestamptz)`,
-    [requestFail, storeA, JSON.stringify([{ product_id: provi, quantity: 2 }]), date],
+    [requestFail, storeA, JSON.stringify([{ product_id: provi, quantity: 3 }]), date],
   ),
   'stok tidak cukup harus menggagalkan transaksi',
 )
-assert.equal(Number(await scalar(`select stok from public.products where id = $1`, [provi])), 1)
+assert.equal(Number(await scalar(`select stok from public.products where id = $1`, [provi])), 2)
 assert.equal(Number(await scalar(`select count(*) from public.history where request_id = $1`, [requestFail])), 0)
 assert.equal(Number(await scalar(`select count(*) from public.transaction_requests where request_id = $1`, [requestFail])), 0, 'ledger juga rollback jika transaksi gagal')
 
@@ -121,7 +144,7 @@ const requestMulti = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 await expectFailure(
   () => db.query(
     `select public.process_inventory_transaction($1::uuid, $2::uuid, 'keluar', $3::jsonb, null, 'Tester', $4::timestamptz)`,
-    [requestMulti, storeA, JSON.stringify([{ product_id: panasonic, quantity: 1 }, { product_id: provi, quantity: 2 }]), date],
+    [requestMulti, storeA, JSON.stringify([{ product_id: panasonic, quantity: 1 }, { product_id: provi, quantity: 3 }]), date],
   ),
   'multi-product harus atomic',
 )
@@ -148,7 +171,7 @@ assert.equal(correction.rows.length, 1)
 assert.equal(Number(await scalar(`select stok from public.products where id = $1`, [panasonic])), 29)
 assert.equal(Number(await scalar(`select count(*) from public.history where product_id = $1 and keterangan = 'Koreksi stok melalui edit produk'`, [panasonic])), 1)
 await expectFailure(
-  () => db.query(`select public.update_inventory_product($1::uuid, $2::uuid, 'Lampu Panasonic', 'Panasonic', 36000, 30, 'LP-001', 27)`, [panasonic, storeA]),
+  () => db.query(`select public.update_inventory_product($1::uuid, $2::uuid, 'Lampu Panasonic', 'Panasonic', 36000, 30, 'LP-001', 28)`, [panasonic, storeA]),
   'expected stock stale harus ditolak',
 )
 
