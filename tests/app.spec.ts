@@ -99,8 +99,9 @@ test('scanner manual barcode resolves existing product into transaction cart', a
   await page.getByLabel('Input barcode manual').fill('8991001000011')
   await page.getByRole('button', { name: 'Cari barcode' }).click()
 
-  await expect(page.getByRole('heading', { name: 'Keranjang Transaksi' })).toBeVisible()
-  await expect(page.getByText('Charger USB-C 33W').first()).toBeVisible()
+  const cartDialog = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Keranjang Transaksi' }) })
+  await expect(cartDialog).toBeVisible()
+  await expect(cartDialog.getByText('Charger USB-C 33W')).toBeVisible()
 })
 
 test('desktop and mobile navigation remain usable without horizontal overflow', async ({ page }) => {
