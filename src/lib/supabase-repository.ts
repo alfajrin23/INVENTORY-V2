@@ -256,7 +256,7 @@ export const supabaseRepository: InventoryRepository = {
       p_items: input.items.map((item) => ({ product_id: item.product.id, quantity: item.quantity })),
       p_note: input.note ?? null,
       p_operator: input.operator ?? 'Kasir',
-      p_date: input.date ? new Date(input.date).toISOString() : new Date().toISOString(),
+      p_date: input.date ? new Date(input.date).toISOString() : null,
     })
     if (error) throw new Error(error.message)
     return rpcResult(data)
