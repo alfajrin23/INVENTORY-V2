@@ -21,7 +21,7 @@ test('text fallback creates a confirmed inventory transaction', async ({ page })
 
   await page.getByRole('button', { name: 'Tutup' }).click()
   await page.goto('/history.html')
-  await expect(page.getByText('Charger USB-C 33W').first()).toBeVisible()
+  await expect(page.locator('p:visible', { hasText: 'Charger USB-C 33W' }).first()).toBeVisible()
 })
 
 test('ambiguous voice product shows suggestions and never auto-submits', async ({ page }) => {
@@ -29,9 +29,10 @@ test('ambiguous voice product shows suggestions and never auto-submits', async (
   await page.getByTestId('voice-command').fill('jual 1 charger anker')
   await page.getByTestId('voice-submit').click()
 
-  await expect(page.getByTestId('voice-suggestions')).toBeVisible()
+  const suggestions = page.getByTestId('voice-suggestions')
+  await expect(suggestions).toBeVisible()
   await expect(page.getByTestId('voice-confirmation')).toHaveCount(0)
-  await expect(page.getByText('Charger USB-C 33W')).toBeVisible()
+  await expect(suggestions.getByRole('button', { name: /Charger USB-C 33W/ })).toBeVisible()
 })
 
 test('voice pending transaction can be cancelled without mutation', async ({ page }) => {
