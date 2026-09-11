@@ -69,7 +69,8 @@ alter table public.transaction_requests enable row level security;
 revoke all on public.stores, public.products, public.history, public.transaction_requests from anon;
 revoke all on public.stores, public.products, public.history, public.transaction_requests from authenticated;
 grant select, insert, update, delete on public.stores to authenticated;
-grant select, insert, update, delete on public.products to authenticated;
+-- Direct product UPDATE is deliberately not exposed. Product edits and stock corrections use the guarded RPC.
+grant select, insert, delete on public.products to authenticated;
 grant select on public.history to authenticated;
 
 create policy "stores_select_owner" on public.stores
@@ -216,6 +217,7 @@ declare
   v_uid uuid := auth.uid();
   v_fingerprint text;
   v_existing_fingerprint text;
+  v_canonical_items text;
   v_inserted integer;
   v_item jsonb;
   v_product_id uuid;
@@ -239,8 +241,13 @@ begin
     raise exception 'Produk duplikat dalam satu transaksi tidak diperbolehkan' using errcode = '22023';
   end if;
 
+  -- Make retries stable even if the client reconstructed the same cart in a different item order.
+  select coalesce(jsonb_agg(element order by element->>'product_id'), '[]'::jsonb)::text
+  into v_canonical_items
+  from jsonb_array_elements(p_items) element;
+
   v_fingerprint := md5(
-    p_store_id::text || '|' || p_category || '|' || p_items::text || '|' ||
+    p_store_id::text || '|' || p_category || '|' || v_canonical_items || '|' ||
     coalesce(p_note, '') || '|' || coalesce(p_operator, '') || '|' || coalesce(p_date::text, '')
   );
 
