@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { parseVoiceCommand, parseVoiceDraftEdit, matchVoiceProducts } from '../../src/lib/voice-command'
+import { lookupScannedProduct } from '../../src/lib/barcode-product-reference'
 
 const routes = ['/', '/databarang.html', '/history.html', '/laporan.html', '/laporanbarangmasuk.html', '/laporanbarangkeluar.html', '/laporanstokbarang.html', '/laporanpendapatan.html', '/pendapatanharian.html', '/pendapatanmingguan.html', '/pendapatanbulanan.html', '/pengaturan.html', '/profilsetting.html']
 async function data(page: Page) { return page.evaluate(() => JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!)) }
@@ -55,6 +56,20 @@ test('parser understands Indonesian intents, numbers, aliases and multiple items
   expect(matchVoiceProducts('lampu Philips 9 watt',[product])).toHaveLength(0)
 })
 
+test('barcode lookup fills product draft from store, scan text and brand reference', () => {
+  const product = { id:'1', namaBarang:'Speaker Bluetooth Mini', brand:'JBL', stok:8, harga:325000, barcode:'8991001000035', storeId:'1', createdAt:'' }
+  expect(lookupScannedProduct('8991001000035',[product])).toMatchObject({ namaBarang:'Speaker Bluetooth Mini', brand:'JBL', source:'store', confidence:'high' })
+  expect(lookupScannedProduct('brand Philips nama Lampu LED 12W barcode 7770003 harga 35000 stok 7',[])).toMatchObject({
+    barcode:'7770003',
+    namaBarang:'Lampu LED 12W',
+    brand:'Philips',
+    harga:35000,
+    stok:7,
+    source:'scan-text',
+  })
+  expect(lookupScannedProduct('Jepi lampu 12 watt kode 7788',[])).toMatchObject({ barcode:'7788', namaBarang:'Lampu LED', brand:'Jepi' })
+})
+
 for (const width of [320,360,375,390,412,430,768,1440]) {
   test(`all routes load without overflow or console errors at ${width}px`, async ({ page }) => {
     await page.setViewportSize({width,height:900})
@@ -105,6 +120,31 @@ test('add, edit, barcode export, search, delete product', async ({ page }) => {
   page.on('dialog',d=>d.accept())
   await page.getByRole('button',{name:'Hapus Lampu Philips'}).click()
   await expect(page.getByText('Produk tidak ditemukan')).toBeVisible()
+})
+
+test('add product scanner recognizes draft reference and keeps fields editable', async ({page}) => {
+  await page.setViewportSize({width:390,height:844})
+  await page.goto('/databarang.html')
+  await page.getByRole('button',{name:'Tambah Barang',exact:true}).click()
+  await page.getByRole('button',{name:'Scan Barcode',exact:true}).click()
+  await page.getByLabel('Input barcode manual').fill('brand Philips nama Lampu LED 12W barcode 7770003 harga 35000 stok 7')
+  await page.getByRole('button',{name:'Cari barcode'}).click()
+  await page.getByRole('button',{name:'Tambah produk baru'}).click()
+  await expect(page.getByText('Referensi scan',{exact:true})).toBeVisible()
+  await expect(page.getByLabel('Barcode',{exact:true})).toHaveValue('7770003')
+  await expect(page.getByLabel('Nama Barang',{exact:true})).toHaveValue('Lampu LED 12W')
+  await expect(page.getByLabel('Brand',{exact:true})).toHaveValue('Philips')
+  await expect(page.getByLabel('Harga',{exact:true})).toHaveValue('35.000')
+  await expect(page.getByLabel('Stok',{exact:true})).toHaveValue('7')
+  await page.getByLabel('Nama Barang',{exact:true}).fill('Lampu LED Philips 12W')
+  await page.getByLabel('Brand',{exact:true}).fill('Philips Lighting')
+  await page.getByRole('button',{name:'Simpan',exact:true}).click()
+  const after = await data(page)
+  const created = after.products.find((p:{barcode:string}) => p.barcode === '7770003')
+  expect(created.namaBarang).toBe('Lampu LED Philips 12W')
+  expect(created.brand).toBe('Philips Lighting')
+  expect(created.harga).toBe(35000)
+  expect(created.stok).toBe(7)
 })
 
 for (const category of ['masuk','keluar']) {

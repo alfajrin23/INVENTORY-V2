@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { lookupScannedProduct } from '@/lib/barcode-product-reference'
 import {
   matchVoiceProducts,
   normalizeVoice,
@@ -111,6 +112,19 @@ export function VoiceDialog({
   const setDraftBarcode = (barcode: string) => {
     const clean = barcode.replace(/\s+/g, '')
     setCreateDraft(draft => draft ? { ...draft, barcode: clean } : draft)
+  }
+
+  const applyDraftScan = (value: string) => {
+    const suggestion = lookupScannedProduct(value, products)
+    const clean = suggestion.barcode || value.replace(/\s+/g, '')
+    setCreateDraft(draft => draft ? {
+      ...draft,
+      barcode: clean,
+      name: suggestion.namaBarang && !draft.name.trim() ? suggestion.namaBarang : draft.name,
+      brand: suggestion.brand && !draft.brand.trim() ? suggestion.brand : draft.brand,
+      price: suggestion.harga !== null && draft.price === null ? suggestion.harga : draft.price,
+      stock: suggestion.stok !== null && draft.stock === null ? suggestion.stok : draft.stock,
+    } : draft)
   }
 
   const applyTransactionCommand = (parsed: VoiceTransactionCommand) => {
@@ -313,14 +327,15 @@ export function VoiceDialog({
           onOpenChange={setBarcodeScannerOpen}
           products={products}
           title="Scan Barcode Barang Baru"
-          onRawBarcode={setDraftBarcode}
+          description="Scan barcode atau QR produk. Jika ada nama atau brand di hasil scan, draft barang baru ikut diisi."
+          onRawBarcode={applyDraftScan}
           onDetected={product => {
             setDraftBarcode(product.barcode)
             setError(`Barcode sudah dipakai oleh ${product.namaBarang}. Gunakan barcode lain.`)
             setBarcodeScannerOpen(false)
           }}
           onMissingBarcode={barcode => {
-            setDraftBarcode(barcode)
+            applyDraftScan(barcode)
             setError('')
             setBarcodeScannerOpen(false)
           }}

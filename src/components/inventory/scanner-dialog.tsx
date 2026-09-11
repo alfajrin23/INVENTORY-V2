@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
+import { extractBarcodeValue, normalizeBarcodeValue } from '@/lib/barcode-product-reference'
 import { matchProduct } from '@/lib/format'
 import type { Product } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -25,6 +26,7 @@ type ScannerDialogProps = {
   onRawBarcode?: (barcode: string) => void
   onMissingBarcode?: (barcode: string) => void
   title?: string
+  description?: string
 }
 
 export function ScannerDialog({
@@ -35,6 +37,7 @@ export function ScannerDialog({
   onRawBarcode,
   onMissingBarcode,
   title = 'Scanner Barcode',
+  description = 'Pilih barang dari barcode atau pencarian. Transaksi tetap perlu dikonfirmasi.',
 }: ScannerDialogProps) {
   const [scannerId] = useState(() => {
     const token =
@@ -61,22 +64,25 @@ export function ScannerDialog({
   }, [debouncedSearch, products])
 
   const resolveBarcode = useCallback((barcode: string) => {
-    const normalized = barcode.trim()
-    if (!normalized || handledBarcodeRef.current === normalized) {
+    const raw = barcode.trim()
+    const normalized = extractBarcodeValue(raw) || (/^[A-Za-z0-9._-]{3,80}$/.test(raw) ? normalizeBarcodeValue(raw) : '')
+    const handledKey = normalized || raw
+    if (!raw || handledBarcodeRef.current === handledKey) {
       return
     }
 
-    onRawBarcode?.(normalized)
-    const product = products.find((item) => item.barcode === normalized)
+    onRawBarcode?.(raw)
+    const product = normalized ? products.find((item) => normalizeBarcodeValue(item.barcode) === normalized) : null
     if (product) {
-      handledBarcodeRef.current = normalized
+      handledBarcodeRef.current = handledKey
       setMissingBarcode('')
       navigator.vibrate?.(160)
       onDetected(product)
       return
     }
 
-    setMissingBarcode(normalized)
+    setManualBarcode(handledKey)
+    setMissingBarcode(handledKey)
   }, [onDetected, onRawBarcode, products])
 
   useEffect(() => { resolverRef.current = resolveBarcode }, [resolveBarcode])
@@ -195,9 +201,7 @@ export function ScannerDialog({
               <Barcode className="size-5 text-cyan-200" />
               {title}
             </DialogTitle>
-            <DialogDescription className="text-white/58">
-              Pilih barang dari barcode atau pencarian. Transaksi tetap perlu dikonfirmasi.
-            </DialogDescription>
+            <DialogDescription className="text-white/58">{description}</DialogDescription>
           </DialogHeader>
 
           {cameraStatus === 'error' && <p role="status" className="text-amber-100">Kamera tidak tersedia atau izin ditolak. Gunakan barcode manual atau pencarian produk.</p>}

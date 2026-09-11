@@ -32,6 +32,12 @@ import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
+import {
+  lookupScannedProduct,
+  productReferenceBrands,
+  productReferenceNames,
+  type ProductScanSuggestion,
+} from '@/lib/barcode-product-reference'
 import { formatCurrency, formatNumber, matchProduct } from '@/lib/format'
 import type { Product, ProductInput } from '@/lib/types'
 
@@ -51,6 +57,20 @@ const emptyForm: ProductFormState = {
   barcode: '',
 }
 
+const scanSourceLabels: Record<ProductScanSuggestion['source'], string> = {
+  store: 'Data toko',
+  'barcode-reference': 'Referensi barcode',
+  'scan-text': 'Teks scan',
+  'brand-reference': 'Referensi brand',
+  'barcode-only': 'Barcode baru',
+}
+
+const scanConfidenceLabels: Record<ProductScanSuggestion['confidence'], string> = {
+  high: 'Akurat',
+  medium: 'Perlu cek',
+  low: 'Lengkapi manual',
+}
+
 function cleanNumber(value: string) {
   return value.replace(/\D/g, '')
 }
@@ -62,6 +82,19 @@ function productToForm(product: Product): ProductFormState {
     harga: String(product.harga),
     stok: String(product.stok),
     barcode: product.barcode,
+  }
+}
+
+function productToScanSuggestion(product: Product): ProductScanSuggestion {
+  return {
+    barcode: product.barcode,
+    namaBarang: product.namaBarang,
+    brand: product.brand,
+    harga: product.harga,
+    stok: product.stok,
+    source: 'store',
+    confidence: 'high',
+    reason: 'Barcode sama dengan produk di toko aktif.',
   }
 }
 
@@ -157,6 +190,7 @@ export function ProductsPage() {
   const [fullscreenIndex, setFullscreenIndex] = useState(0)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [form, setForm] = useState<ProductFormState>(emptyForm)
+  const [scanSuggestion, setScanSuggestion] = useState<ProductScanSuggestion | null>(null)
 
   const filteredProducts = useMemo(() => {
     const result = search.trim() ? products.filter((product) => matchProduct(product, search)) : products
@@ -168,8 +202,14 @@ export function ProductsPage() {
     [products, selectedIds],
   )
 
-  const names = useMemo(() => Array.from(new Set(products.map((product) => product.namaBarang))).slice(0, 12), [products])
-  const brands = useMemo(() => Array.from(new Set(products.map((product) => product.brand))).slice(0, 12), [products])
+  const names = useMemo(
+    () => Array.from(new Set([...products.map((product) => product.namaBarang), ...productReferenceNames])).slice(0, 30),
+    [products],
+  )
+  const brands = useMemo(
+    () => Array.from(new Set([...products.map((product) => product.brand), ...productReferenceBrands])).slice(0, 30),
+    [products],
+  )
 
   useEffect(() => {
     const pendingBarcode = sessionStorage.getItem('pendingBarcode')
@@ -183,14 +223,58 @@ export function ProductsPage() {
 
   const openCreateForm = () => {
     setEditingProduct(null)
+    setScanSuggestion(null)
     setForm(emptyForm)
     setFormOpen(true)
   }
 
   const openEditForm = (product: Product) => {
     setEditingProduct(product)
+    setScanSuggestion(null)
     setForm(productToForm(product))
     setFormOpen(true)
+  }
+
+  const applyScanSuggestion = (value: string) => {
+    const suggestion = lookupScannedProduct(value, products)
+    setScanSuggestion(suggestion)
+    setForm((current) => {
+      const replaceKnownFields = suggestion.confidence === 'high' || suggestion.source === 'scan-text'
+      const next: ProductFormState = {
+        ...current,
+        barcode: suggestion.barcode || current.barcode,
+      }
+
+      if (suggestion.namaBarang && (replaceKnownFields || !current.namaBarang.trim())) {
+        next.namaBarang = suggestion.namaBarang
+      }
+
+      if (suggestion.brand && (replaceKnownFields || !current.brand.trim())) {
+        next.brand = suggestion.brand
+      }
+
+      if (suggestion.harga !== null && (replaceKnownFields || !current.harga.trim())) {
+        next.harga = String(suggestion.harga)
+      }
+
+      if (suggestion.stok !== null && (replaceKnownFields || !current.stok.trim() || current.stok === emptyForm.stok)) {
+        next.stok = String(suggestion.stok)
+      }
+
+      return next
+    })
+
+    return suggestion
+  }
+
+  const closeScannerWithDraft = () => {
+    setScannerOpen(false)
+    showToast(
+      scanSuggestion?.namaBarang || scanSuggestion?.brand
+        ? 'Referensi scan masuk ke form'
+        : 'Barcode masuk ke form',
+      'info',
+    )
   }
 
   const toggleSelect = (id: string) => {
@@ -517,14 +601,38 @@ export function ProductsPage() {
                 <Input
                   id="barcode"
                   value={form.barcode}
-                  onChange={(event) => setForm((current) => ({ ...current, barcode: event.target.value }))}
+                  onChange={(event) => {
+                    setScanSuggestion(null)
+                    setForm((current) => ({ ...current, barcode: event.target.value }))
+                  }}
                   className="border-white/12 bg-white/8 font-mono text-white"
                 />
-                <Button type="button" variant="outline" onClick={() => setScannerOpen(true)} className="border-white/12 bg-white/8">
+                <Button type="button" variant="outline" aria-label="Scan Barcode" onClick={() => setScannerOpen(true)} className="border-white/12 bg-white/8">
                   <ScanLine className="size-4" />
                 </Button>
               </div>
             </div>
+            {scanSuggestion ? (
+              <div className="space-y-3 rounded-xl border border-cyan-200/20 bg-cyan-300/10 p-4 text-sm sm:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 font-semibold text-cyan-50">
+                    <Barcode className="size-4 text-cyan-200" />
+                    Referensi scan
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="bg-cyan-300/15 text-cyan-50">{scanSourceLabels[scanSuggestion.source]}</Badge>
+                    <Badge className="bg-emerald-300/15 text-emerald-50">{scanConfidenceLabels[scanSuggestion.confidence]}</Badge>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <p><span className="text-white/52">Nama</span><br /><span className="font-medium text-white">{scanSuggestion.namaBarang || '-'}</span></p>
+                  <p><span className="text-white/52">Brand</span><br /><span className="font-medium text-white">{scanSuggestion.brand || '-'}</span></p>
+                  <p><span className="text-white/52">Barcode</span><br /><span className="font-mono text-cyan-50">{scanSuggestion.barcode || '-'}</span></p>
+                  <p><span className="text-white/52">Harga</span><br /><span className="font-mono text-white">{scanSuggestion.harga !== null ? formatCurrency(scanSuggestion.harga) : '-'}</span></p>
+                </div>
+                <p className="text-white/58">{scanSuggestion.reason}</p>
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
@@ -542,12 +650,15 @@ export function ProductsPage() {
         onOpenChange={setScannerOpen}
         products={products}
         title="Scan Barcode Produk"
-        onRawBarcode={(barcode) => setForm((current) => ({ ...current, barcode }))}
+        description="Scan barcode atau QR produk. Jika barcode belum terdaftar, hasil scan dipakai sebagai draft barang baru."
+        onRawBarcode={applyScanSuggestion}
         onDetected={(product) => {
+          setScanSuggestion(productToScanSuggestion(product))
           setForm(productToForm(product))
           setScannerOpen(false)
           showToast('Barcode dikenali', 'success')
         }}
+        onMissingBarcode={closeScannerWithDraft}
       />
 
       <Dialog open={barcodeOpen} onOpenChange={setBarcodeOpen}>
