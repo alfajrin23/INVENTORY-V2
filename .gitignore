@@ -32,3 +32,5 @@ artifacts/
 supabase/.temp/
 backups/
 .codegraph/
+.android-toolchain/
+release/*.apk

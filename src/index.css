@@ -294,6 +294,7 @@ main, section, [data-glass-panel], [data-slot="dialog-content"] { min-width: 0; 
 [data-slot="dialog-header"] { padding-right: 1.5rem; }
 [data-slot="dialog-footer"] { flex-wrap: wrap; }
 .voice-sheet { max-height: 90dvh; }
+.scanner-camera video { background: #000; object-fit: contain; }
 html.light [data-slot="dialog-content"] {
   color-scheme: dark;
   --background: #172033; --foreground: #f1f5f9; --input: #334155;
@@ -313,7 +314,56 @@ html.light [data-slot="dialog-content"] {
   button:has(>svg:only-child) { min-width: 44px; }
   [data-slot="checkbox"] { min-width: 24px; min-height: 24px; }
   [data-slot="dialog-content"] { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
-  .voice-sheet { top: auto; bottom: 0; left: 0; transform: none; translate: none; width: 100%; max-width: none; border-radius: 1.5rem 1.5rem 0 0; }
+  .voice-sheet {
+    inset-inline: 0 !important;
+    top: auto !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    box-sizing: border-box;
+    width: 100vw !important;
+    width: 100dvw !important;
+    max-width: 100vw !important;
+    max-width: 100dvw !important;
+    max-height: calc(100dvh - env(safe-area-inset-top) - .5rem);
+    margin: 0;
+    transform: none !important;
+    translate: 0 0 !important;
+    border-radius: 1.5rem 1.5rem 0 0;
+  }
+  .scanner-sheet {
+    inset: 0 !important;
+    box-sizing: border-box;
+    display: grid !important;
+    grid-template-rows: minmax(0, 1fr) auto;
+    width: 100vw !important;
+    width: 100dvw !important;
+    max-width: 100vw !important;
+    max-width: 100dvw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    margin: 0;
+    overflow: hidden !important;
+    transform: none !important;
+    translate: 0 0 !important;
+    border-radius: 0 !important;
+  }
+  .scanner-camera {
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  .scanner-camera video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    background: #000 !important;
+  }
+  .scanner-controls {
+    max-height: min(42dvh, 24rem);
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+  }
   .mobile-bottom-nav { bottom: max(.75rem, env(safe-area-inset-bottom)); border-radius: 2rem; grid-template-columns: 1fr 1fr 64px 1fr 1fr; }
   [data-glass-panel] { backdrop-filter: none; box-shadow: 0 5px 20px #00000012; border-radius: 1rem; }
   .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }

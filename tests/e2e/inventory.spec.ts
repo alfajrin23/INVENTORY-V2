@@ -369,6 +369,32 @@ test('scanner repeat manual detection does not duplicate cart selection',async (
   expect(errors).toEqual([])
 })
 
+test('mobile voice sheet and scanner camera fit Android viewport', async ({page}) => {
+  await page.setViewportSize({width:390,height:844})
+  await mockSpeech(page,'','not-allowed')
+  await page.goto('/')
+  await page.getByRole('button',{name:'Buka Voice AI'}).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect.poll(() => page.getByRole('dialog').evaluate(el => {
+    const r = el.getBoundingClientRect()
+    return r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1
+  })).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.getByRole('button',{name:'Batalkan',exact:true}).click()
+
+  await page.getByRole('button',{name:'Buka scanner',exact:true}).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await expect.poll(() => page.getByRole('dialog').evaluate(el => {
+    const r = el.getBoundingClientRect()
+    return r.left >= -1 && r.top >= -1 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1
+  })).toBe(true)
+  await expect.poll(() => page.locator('[data-scanner-camera]').evaluate(el => {
+    const r = el.getBoundingClientRect()
+    return r.left >= -1 && r.right <= innerWidth + 1 && r.width >= innerWidth - 2 && r.height >= innerHeight * 0.5
+  })).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 test('mobile light visual evidence and reduced height dialog',async ({page})=>{
   await page.setViewportSize({width:390,height:844});await page.goto('/laporan.html')
   await expect(page.locator('html')).toHaveClass('light')

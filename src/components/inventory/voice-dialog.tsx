@@ -233,7 +233,7 @@ export function VoiceDialog({
   const locked = state === 'saving' || state === 'success'
 
   return <Dialog open onOpenChange={open => { if (!open && !busy.current) onClose() }}>
-    <DialogContent className="voice-sheet border-white/12 bg-[#121827] text-white sm:max-w-lg" showCloseButton={state !== 'saving'}>
+    <DialogContent className="voice-sheet box-border max-h-[90dvh] overflow-y-auto border-white/12 bg-[#121827] text-white shadow-2xl sm:max-w-lg max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:w-dvw max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl" showCloseButton={state !== 'saving'}>
       <DialogHeader>
         <DialogTitle className="flex items-center gap-3 pr-6 text-xl"><Mic className={state === 'listening' ? 'voice-pulse text-emerald-300' : 'text-emerald-300'} />Voice AI</DialogTitle>
         <DialogDescription>Ucapkan transaksi, koreksi, atau tambah barang baru. Stok berubah setelah konfirmasi.</DialogDescription>
