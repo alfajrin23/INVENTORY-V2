@@ -33,7 +33,7 @@ import { useToast } from '@/hooks/use-toast'
 import { dateTimeLabel, formatCurrency } from '@/lib/format'
 import { routes } from '@/lib/navigation'
 import { downloadReceiptPdf, printReceiptWindow } from '@/lib/pdf'
-import type { CartItem, HistoryItem, Product, TransactionCategory } from '@/lib/types'
+import type { CartItem, HistoryItem, Product, ProductInput, TransactionCategory } from '@/lib/types'
 
 const VoiceDialog = lazy(() => import('./voice-dialog').then(m => ({ default: m.VoiceDialog })))
 
@@ -58,7 +58,7 @@ function clampQuantity(value: number, max: number, category: TransactionCategory
 
 export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpen, onVoiceOpenChange }: TransactionWorkflowProps) {
   const navigate = useNavigate()
-  const { products, activeStore, processTransaction } = useInventory()
+  const { products, activeStore, processTransaction, addProduct: createInventoryProduct } = useInventory()
   const { showToast } = useToast()
   const [cartOpen, setCartOpen] = useState(false)
   const [resultOpen, setResultOpen] = useState(false)
@@ -148,10 +148,22 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
     navigate(routes.products)
   }
 
+  const handleVoiceCreateProduct = async (product: ProductInput) => {
+    await createInventoryProduct(product)
+    showToast('Barang baru berhasil ditambahkan', 'success')
+  }
+
   return (
     <>
       {voiceOpen && <Suspense fallback={<p role="status" className="fixed bottom-28 left-4 z-[60] rounded-xl bg-slate-900 p-4 text-white">Menyiapkan Voice AI?</p>}>
-        <VoiceDialog key={activeStore?.id} products={products} onClose={() => onVoiceOpenChange(false)} onConfirm={commitTransaction} />
+        <VoiceDialog
+          key={activeStore?.id}
+          products={products}
+          activeStoreId={activeStore?.id}
+          onClose={() => onVoiceOpenChange(false)}
+          onConfirm={commitTransaction}
+          onCreateProduct={handleVoiceCreateProduct}
+        />
       </Suspense>}
       <ScannerDialog
         open={scannerOpen}

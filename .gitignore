@@ -31,3 +31,4 @@ test-results/
 artifacts/
 supabase/.temp/
 backups/
+.codegraph/
