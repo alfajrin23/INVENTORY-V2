@@ -18,6 +18,7 @@ import {
   type VoiceTransactionCommand,
 } from '@/lib/voice-command'
 import type { CartItem, Product, ProductInput, TransactionCategory } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
 type Recognition = {
   lang: string; interimResults: boolean; continuous: boolean
@@ -52,7 +53,7 @@ function numericValue(value: string) {
 }
 
 function canAutoSelect(matches: ReturnType<typeof matchVoiceProducts>) {
-  return matches[0]?.score >= 0.9 && (!matches[1] || matches[0].score - matches[1].score >= 0.15)
+  return matches[0]?.score >= 0.98 && (!matches[1] || matches[0].score - matches[1].score >= 0.2)
 }
 
 function insecureSpeechOriginMessage() {
@@ -271,10 +272,37 @@ export function VoiceDialog({
           return <div key={index} className="rounded-2xl border border-white/15 bg-white/5 p-4">
             <p className="font-semibold">{selected?.namaBarang ?? item.query}</p><p>Qty: {item.quantity}</p>
             {!selected && <p className="my-2 flex gap-2 text-amber-200"><TriangleAlert className="mt-0.5 size-4 shrink-0" />{matches.length ? 'Terdapat beberapa barang yang mirip atau kecocokan belum pasti. Pilih produk:' : 'Produk tidak ditemukan. Perbaiki perintah Anda.'}</p>}
-            {matches.length > 0 && <label className="mt-2 block text-sm">Produk yang dimaksud
-              <select aria-label={`Produk untuk ${item.query}`} disabled={locked} value={choices[index] ?? ''} className="mt-1 min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 p-2" onChange={e => setChoices(c => ({ ...c, [index]: e.target.value }))}>
-                <option value="">Pilih produk</option>{matches.map(m => <option key={m.product.id} value={m.product.id}>{m.product.namaBarang} - {m.product.brand} ({Math.round(m.score * 100)}%)</option>)}
-              </select></label>}
+            {matches.length > 0 && <>
+              <label className="mt-2 block text-sm">Produk yang dimaksud
+                <select aria-label={`Produk untuk ${item.query}`} disabled={locked} value={choices[index] ?? ''} className="mt-1 min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 p-2" onChange={e => setChoices(c => ({ ...c, [index]: e.target.value }))}>
+                  <option value="">Pilih produk</option>{matches.map(m => <option key={m.product.id} value={m.product.id}>{m.product.namaBarang} - {m.product.brand} ({Math.round(m.score * 100)}%)</option>)}
+                </select>
+              </label>
+              {(!selected || matches.length > 1) && <div className="mt-3 grid gap-2" aria-label={`Kandidat untuk ${item.query}`}>
+                {matches.map(match => {
+                  const active = choices[index] === match.product.id
+                  return (
+                    <button
+                      key={match.product.id}
+                      type="button"
+                      disabled={locked}
+                      onClick={() => setChoices(current => ({ ...current, [index]: match.product.id }))}
+                      className={cn(
+                        'flex min-h-16 w-full items-center justify-between gap-3 rounded-xl border p-3 text-left transition',
+                        active ? 'border-emerald-200/70 bg-emerald-300/15 text-emerald-50' : 'border-white/10 bg-white/[0.06] text-white hover:border-cyan-200/40 hover:bg-cyan-300/10',
+                      )}
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold">{match.product.namaBarang}</span>
+                        <span className="block truncate text-sm opacity-70">{match.product.brand} - stok {match.product.stok}</span>
+                        <span className="block truncate font-mono text-xs opacity-60">{match.product.barcode}</span>
+                      </span>
+                      <span className="shrink-0 rounded-full bg-black/25 px-2 py-1 font-mono text-xs">{Math.round(match.score * 100)}%</span>
+                    </button>
+                  )
+                })}
+              </div>}
+            </>}
             {selected && <p className="mt-2 text-sm text-white/70">Stok sekarang: {selected.stok}<br />Stok setelah transaksi: {selected.stok + (transactionCommand.category === 'masuk' ? 1 : -1) * (totals.get(selected.id) ?? 0)}</p>}
           </div>
         })}

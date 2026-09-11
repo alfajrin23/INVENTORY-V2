@@ -53,7 +53,10 @@ test('parser understands Indonesian intents, numbers, aliases and multiple items
   for (const text of ['jual lampu','jual lampu nol','jual lampu -2','jual lampu 1.5','lampu dua','jual lampu dua dan restok kabel tiga']) expect(() => parseVoiceCommand(text)).toThrow()
   const product = { id:'1', namaBarang:'Philips LED Bulb 12W', brand:'Philips', stok:15, harga:1, barcode:'1', storeId:'1', createdAt:'' }
   expect(matchVoiceProducts('lampu Philips 12 watt',[product])[0].score).toBe(1)
+  expect(matchVoiceProducts('lampu filips',[product])[0].product.id).toBe('1')
   expect(matchVoiceProducts('lampu Philips 9 watt',[product])).toHaveLength(0)
+  const speaker = { id:'2', namaBarang:'Speaker Aktif 8 Inch', brand:'ACR', stok:15, harga:1, barcode:'2', storeId:'1', createdAt:'' }
+  expect(matchVoiceProducts('spiker acer',[speaker])[0].product.id).toBe('2')
 })
 
 test('barcode lookup fills product draft from store, scan text and brand reference', () => {
@@ -185,6 +188,33 @@ test('ambiguous product requires explicit selection',async ({page})=>{
   await expect(page.getByText(/Terdapat beberapa barang/)).toBeVisible()
   await expect(page.getByRole('button',{name:'Konfirmasi',exact:true})).toBeDisabled()
   await page.getByLabel('Produk untuk charger').selectOption('prd-001')
+  await expect(page.getByRole('button',{name:'Konfirmasi',exact:true})).toBeEnabled()
+})
+
+test('misheard voice product shows candidates before user confirms', async ({page}) => {
+  await mockSpeech(page,'transaksi lampu filips dua')
+  await page.goto('/')
+  await page.evaluate(() => {
+    const d = JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!)
+    d.products.push({
+      id:'voice-fuzzy-philips',
+      namaBarang:'Philips LED Bulb 12W',
+      brand:'Philips',
+      harga:15000,
+      stok:20,
+      barcode:'voice-fuzzy-001',
+      storeId:'store-main',
+      createdAt:new Date().toISOString(),
+    })
+    localStorage.setItem('ab-elektronik-v2-data',JSON.stringify(d))
+  })
+  await page.reload()
+  await page.getByRole('button',{name:'Buka Voice AI'}).click()
+  const region = page.getByRole('region', { name: 'Konfirmasi transaksi suara' })
+  await expect(region.getByText(/Terdapat beberapa barang/)).toBeVisible()
+  await expect(region.getByText('Philips LED Bulb 12W',{exact:true})).toBeVisible()
+  await expect(page.getByRole('button',{name:'Konfirmasi',exact:true})).toBeDisabled()
+  await region.getByRole('button',{name:/Philips LED Bulb 12W/}).click()
   await expect(page.getByRole('button',{name:'Konfirmasi',exact:true})).toBeEnabled()
 })
 

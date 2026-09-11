@@ -17,11 +17,31 @@ export type VoiceDraftEdit =
 
 export function normalizeVoice(text: string) {
   return text.toLocaleLowerCase('id-ID').normalize('NFKD').replace(/(\d)\s*(?:watt|w)\b/g, '$1 watt')
+    .replace(/\ba\s+c\s+r\b/g, 'acr').replace(/\bj\s+b\s+l\b/g, 'jbl')
     .replace(/[^a-z0-9\s]/g, ' ').replace(/\b(?:bulb|bohlam)\b/g, 'lampu').replace(/\s+/g, ' ').trim()
 }
 const digits: Record<string, number> = { nol: 0, satu: 1, dua: 2, tiga: 3, empat: 4, lima: 5, enam: 6, tujuh: 7, delapan: 8, sembilan: 9, sepuluh: 10, sebelas: 11, seratus: 100, seribu: 1000 }
 const numberMarkers = new Set([...Object.keys(digits), 'belas', 'puluh', 'ratus', 'ribu'])
 const createLabels = new Set(['nama', 'merek', 'brand', 'stok', 'stock', 'qty', 'jumlah', 'kuantitas', 'harga', 'barcode', 'kode'])
+const voiceAliasGroups = [
+  ['lampu', 'lampo', 'lampuh', 'lamphu', 'lamp'],
+  ['speaker', 'spiker', 'sepiker', 'speker'],
+  ['charger', 'carger', 'cas', 'casan', 'ces'],
+  ['kabel', 'cable', 'kable'],
+  ['philips', 'filips', 'filip', 'philip', 'pilips', 'pilip', 'phillips'],
+  ['jepi', 'cepi', 'jepy', 'jepie', 'jeppy'],
+  ['panasonic', 'panasonik', 'panasonek'],
+  ['acr', 'acer', 'aser', 'acir'],
+  ['jbl', 'jebel', 'jibiel', 'jabel'],
+  ['anker', 'angker', 'angkir'],
+  ['vention', 'fention', 'vensyen'],
+  ['eterna', 'eterne'],
+  ['krisbow', 'krisbo', 'krisbou'],
+  ['logitech', 'lojitek', 'logitek'],
+  ['baseus', 'basius', 'bases'],
+  ['soundcore', 'sankor', 'soundkor'],
+]
+const voiceAliasEntries = voiceAliasGroups.flatMap(group => group.map(alias => ({ alias, group })))
 const transactionConnectors = new Set(['dan', 'lalu', 'terus', 'kemudian', 'sama'])
 const productNumberUnits = new Set(['watt', 'w', 'meter', 'm', 'mah', 'gb', 'tb', 'mb', 'kg', 'gram', 'gr', 'cm', 'mm', 'inch', 'inci', 'volt', 'v', 'ampere', 'a', 'hz', 'mhz', 'ghz', 'port', 'lubang'])
 
@@ -207,26 +227,69 @@ export function parseVoiceDraftEdit(text: string): VoiceDraftEdit | null {
   return null
 }
 
+function aliasGroupFor(token: string) {
+  return voiceAliasEntries.find(entry => entry.alias === token)?.group ?? null
+}
+
+function sameAliasGroup(a: string, b: string) {
+  const groupA = aliasGroupFor(a)
+  if (groupA?.includes(b)) return true
+  const groupB = aliasGroupFor(b)
+  return Boolean(groupB?.includes(a))
+}
+
+function editDistanceAtMost(a: string, b: string, limit: number) {
+  if (Math.abs(a.length - b.length) > limit) return false
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index)
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i]
+    let best = current[0]
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      const value = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost)
+      current[j] = value
+      best = Math.min(best, value)
+    }
+    if (best > limit) return false
+    for (let j = 0; j < current.length; j++) previous[j] = current[j]
+  }
+  return previous[b.length] <= limit
+}
+
 function closeWord(a: string, b: string) {
   if (a === b) return true
-  if (a.length < 5 || b.length < 5 || /\d/.test(a + b) || Math.abs(a.length - b.length) > 1) return false
-  let i = 0; let j = 0; let edits = 0
-  while (i < a.length && j < b.length) {
-    if (a[i] === b[j]) { i++; j++; continue }
-    if (++edits > 1) return false
-    if (a.length >= b.length) i++
-    if (b.length >= a.length) j++
-  }
-  return edits + (a.length - i) + (b.length - j) <= 1
+  if (sameAliasGroup(a, b)) return true
+  if (Math.min(a.length, b.length) < 3 || /\d/.test(a + b)) return false
+  const maxLength = Math.max(a.length, b.length)
+  const limit = maxLength <= 4 ? 1 : maxLength <= 8 ? 2 : Math.ceil(maxLength * 0.25)
+  return editDistanceAtMost(a, b, limit)
+}
+
+function relatedVoiceWords(product: Product) {
+  return [...new Set(normalizeVoice(`${product.namaBarang} ${product.brand} ${product.barcode}`).split(' ').filter(Boolean))]
+}
+
+function tokenScore(token: string, word: string) {
+  if (token === word) return 1
+  if (sameAliasGroup(token, word)) return 0.94
+  if (closeWord(token, word)) return 0.82
+  if (token.length >= 4 && word.length >= 4 && (token.includes(word) || word.includes(token))) return 0.68
+  return 0
 }
 
 export function matchVoiceProducts(query: string, products: Product[]) {
   const tokens = [...new Set(normalizeVoice(query).split(' ').filter(Boolean))]
   if (!tokens.length) return []
   return products.map(product => {
-    const words = [...new Set(normalizeVoice(`${product.namaBarang} ${product.brand} ${product.barcode}`).split(' ').filter(Boolean))]
+    const words = relatedVoiceWords(product)
     const incompatibleNumber = tokens.some(t => /^\d+$/.test(t) && !words.includes(t))
-    const score = incompatibleNumber ? 0 : tokens.reduce((sum, t) => sum + (words.includes(t) ? 1 : words.some(w => closeWord(t, w)) ? 0.8 : 0), 0) / tokens.length
-    return { product, score }
-  }).filter(item => item.score >= 0.5).sort((a, b) => b.score - a.score).slice(0, 6)
+    const tokenScores = incompatibleNumber ? [] : tokens.map(token => Math.max(...words.map(word => tokenScore(token, word))))
+    const strongMatches = tokenScores.filter(score => score >= 0.62).length
+    const score = incompatibleNumber ? 0 : tokenScores.reduce((sum, value) => sum + value, 0) / tokens.length
+    const minimumStrongMatches = tokens.length === 1 ? 1 : Math.max(1, Math.floor(tokens.length / 2))
+    return { product, score, strongMatches, minimumStrongMatches }
+  }).filter(item => item.score >= (tokens.length === 1 ? 0.55 : 0.38) && item.strongMatches >= item.minimumStrongMatches)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ product, score }) => ({ product, score }))
 }
