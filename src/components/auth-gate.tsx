@@ -53,6 +53,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     )
   }
 
+  const authClient = supabase
+
   if (!ready) {
     return <div role="status" className="grid min-h-screen place-items-center bg-slate-950 text-sm text-white/60">Memeriksa sesi...</div>
   }
@@ -65,10 +67,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setMessage(null)
     try {
       if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+        const { error } = await authClient.auth.signInWithPassword({ email: email.trim(), password })
         if (error) throw error
       } else {
-        const { data, error } = await supabase.auth.signUp({ email: email.trim(), password })
+        const { data, error } = await authClient.auth.signUp({ email: email.trim(), password })
         if (error) throw error
         if (!data.session) setMessage('Akun dibuat. Periksa email untuk konfirmasi sebelum masuk.')
       }
