@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import { AuthGate } from '@/components/auth-gate'
@@ -8,21 +8,62 @@ import { InventoryProvider } from '@/hooks/use-inventory'
 import { ToastProvider } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
 
-const DashboardPage = lazy(() => import('@/pages/dashboard-page').then((module) => ({ default: module.DashboardPage })))
-const ProductsPage = lazy(() => import('@/pages/products-page').then((module) => ({ default: module.ProductsPage })))
-const HistoryPage = lazy(() => import('@/pages/history-page').then((module) => ({ default: module.HistoryPage })))
-const ReportsHubPage = lazy(() => import('@/pages/reports-hub-page').then((module) => ({ default: module.ReportsHubPage })))
-const SettingsPage = lazy(() => import('@/pages/settings-page').then((module) => ({ default: module.SettingsPage })))
+const loadDashboardPage = () => import('@/pages/dashboard-page')
+const loadProductsPage = () => import('@/pages/products-page')
+const loadHistoryPage = () => import('@/pages/history-page')
+const loadReportsHubPage = () => import('@/pages/reports-hub-page')
+const loadSettingsPage = () => import('@/pages/settings-page')
+const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
+const loadReportPages = () => import('@/pages/report-pages')
+
+const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
+const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsPage })))
+const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: module.HistoryPage })))
+const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
+const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })))
 const ProfileSettingsPage = lazy(() =>
-  import('@/pages/profile-settings-page').then((module) => ({ default: module.ProfileSettingsPage })),
+  loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })),
 )
-const IncomingReportPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.IncomingReportPage })))
-const OutgoingReportPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.OutgoingReportPage })))
-const StockReportPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.StockReportPage })))
-const RevenueAnnualPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.RevenueAnnualPage })))
-const RevenueDailyPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.RevenueDailyPage })))
-const RevenueWeeklyPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.RevenueWeeklyPage })))
-const RevenueMonthlyPage = lazy(() => import('@/pages/report-pages').then((module) => ({ default: module.RevenueMonthlyPage })))
+const IncomingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.IncomingReportPage })))
+const OutgoingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.OutgoingReportPage })))
+const StockReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.StockReportPage })))
+const RevenueAnnualPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueAnnualPage })))
+const RevenueDailyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueDailyPage })))
+const RevenueWeeklyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueWeeklyPage })))
+const RevenueMonthlyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueMonthlyPage })))
+
+type NetworkInformation = { saveData?: boolean; effectiveType?: string }
+type NavigatorWithConnection = Navigator & { connection?: NetworkInformation }
+type IdleWindow = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
+  cancelIdleCallback?: (handle: number) => void
+}
+
+function RoutePreloader() {
+  useEffect(() => {
+    const connection = (navigator as NavigatorWithConnection).connection
+    if (connection?.saveData || connection?.effectiveType === '2g' || connection?.effectiveType === 'slow-2g') return
+
+    const preload = () => {
+      void Promise.allSettled([
+        loadProductsPage(),
+        loadHistoryPage(),
+        loadReportsHubPage(),
+      ])
+    }
+
+    const idleWindow = window as IdleWindow
+    if (idleWindow.requestIdleCallback) {
+      const handle = idleWindow.requestIdleCallback(preload, { timeout: 1800 })
+      return () => idleWindow.cancelIdleCallback?.(handle)
+    }
+
+    const timer = window.setTimeout(preload, 900)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  return null
+}
 
 function App() {
   return (
@@ -30,7 +71,8 @@ function App() {
       <TooltipProvider>
         <ToastProvider>
           <AuthGate><InventoryProvider>
-            <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman</div>}>
+            <RoutePreloader />
+            <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman...</div>}>
               <Routes>
                 <Route element={<AppShell />}>
                   <Route index element={<DashboardPage />} />
