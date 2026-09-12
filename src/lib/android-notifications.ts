@@ -41,6 +41,7 @@ export async function showInventoryNotification(storeName: string, products: Pro
     ongoing: true,
     autoCancel: false,
     smallIcon: 'ic_stat_inventory',
+    largeIcon: 'ic_inventory_gradient',
     iconColor: '#0D9488',
   }] })
 }

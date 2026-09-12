@@ -1,17 +1,24 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
+import { DoorOpen, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
+
 import { demoEnabled, supabase, requireSupabase } from '@/lib/supabase'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import './auth-gate.css'
+
+type AuthMode = 'login' | 'request-reset' | 'reset-password'
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(!demoEnabled && !!supabase)
+  const [mode, setMode] = useState<AuthMode>(() => window.location.hash.includes('type=recovery') ? 'reset-password' : 'login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+
   useEffect(() => {
     if (!supabase || demoEnabled) return
     let alive = true
@@ -20,27 +27,84 @@ export function AuthGate({ children }: { children: ReactNode }) {
       setSession(data.session); setLoading(false)
       if (error) setError('Sesi tidak dapat dimuat. Silakan masuk kembali.')
     }).catch(() => { if (alive) { setLoading(false); setError('Koneksi gagal. Silakan coba lagi.') } })
-    const { data } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); setLoading(false) })
+    const { data } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'PASSWORD_RECOVERY') setMode('reset-password')
+      setSession(next); setLoading(false)
+    })
     return () => { alive = false; data.subscription.unsubscribe() }
   }, [])
+
   if (demoEnabled) return children
-  if (loading) return <p className="p-6 text-white" role="status">Memuat sesi…</p>
-  if (session) return <div key={session.user.id}>{children}</div>
-  return <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-5 p-6 text-white">
-    <h1 className="text-2xl font-bold">Masuk ke Inventory</h1>
-    {!supabase ? <p role="alert">Supabase belum dikonfigurasi. Ikuti SUPABASE_SETUP.md dan isi VITE_SUPABASE_URL serta VITE_SUPABASE_PUBLISHABLE_KEY.</p> :
-      <form className="grid gap-4" onSubmit={async event => {
-        event.preventDefault(); if (busy) return; setBusy(true); setError('')
-        try {
-          const { error } = await requireSupabase().auth.signInWithPassword({ email, password })
-          if (error) setError('Gagal masuk. Periksa email, password, dan koneksi Anda.')
-        } catch { setError('Koneksi gagal. Silakan coba lagi.') } finally { setBusy(false) }
-      }}>
-        <Label htmlFor="login-email">Email</Label><Input id="login-email" type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} />
-        <Label htmlFor="login-password">Password</Label><Input id="login-password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} />
-        {error && <p role="alert">{error}</p>}
-        <Button disabled={busy}>{busy ? 'Memeriksa…' : 'Masuk'}</Button>
-        <p className="text-sm text-white/65">Gunakan akun yang dibuat administrator toko.</p>
-      </form>}
+  if (session && mode !== 'reset-password') return <div key={session.user.id}>{children}</div>
+
+  const switchMode = (next: AuthMode) => {
+    setMode(next); setError(''); setNotice(''); setPassword(''); setConfirmPassword(''); setShowPassword(false)
+  }
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (busy || loading) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const client = requireSupabase()
+      if (mode === 'request-reset') {
+        const { error: requestError } = await client.auth.resetPasswordForEmail(email.trim())
+        if (requestError) throw requestError
+        setNotice('Jika email terdaftar, tautan pemulihan telah dikirim. Periksa kotak masuk Anda.')
+      } else if (mode === 'reset-password') {
+        if (password !== confirmPassword) { setError('Konfirmasi password belum sama.'); return }
+        const { error: updateError } = await client.auth.updateUser({ password })
+        if (updateError) throw updateError
+        const { error: signOutError } = await client.auth.signOut()
+        if (signOutError) throw signOutError
+        switchMode('login')
+        setNotice('Password berhasil diubah. Silakan masuk kembali.')
+      } else {
+        const { error: signInError } = await client.auth.signInWithPassword({ email: email.trim(), password })
+        if (signInError) setError('Gagal masuk. Periksa email, password, dan koneksi Anda.')
+      }
+    } catch {
+      setError(mode === 'login' ? 'Koneksi gagal. Silakan coba lagi.' : 'Permintaan gagal. Periksa koneksi atau coba lagi nanti.')
+    } finally { setBusy(false) }
+  }
+
+  const title = mode === 'reset-password' ? 'Buat password baru' : mode === 'request-reset' ? 'Pulihkan akun' : 'Masuk ke Inventory'
+
+  return <main className="auth-page">
+    <header className="auth-brand">
+      <span className="auth-brand-mark">AB</span>
+      <span><strong>ABElektronik</strong><small>Inventory</small></span>
+    </header>
+    <div className="auth-shell">
+      <div className="auth-mascot" aria-hidden="true"><img src="/husky-login.png" alt="" draggable={false} /></div>
+      <section className="auth-panel" aria-label={title}>
+        <h1>{title}</h1>
+        <p className="auth-intro">{mode === 'login' ? 'Selamat datang kembali. Husky menjaga toko Anda.' : mode === 'request-reset' ? 'Masukkan email akun untuk menerima tautan pemulihan.' : 'Masukkan password baru untuk akun Anda.'}</p>
+        {!supabase ? <p className="auth-alert" role="alert">Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.</p> :
+          <form onSubmit={submit} className="auth-form">
+            {mode !== 'reset-password' && <div className="auth-field">
+              <label htmlFor="login-email">Email</label>
+              <div className="auth-input-row"><Mail aria-hidden="true" size={19} /><input id="login-email" type="email" placeholder="email@toko.com" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} /></div>
+            </div>}
+            {mode !== 'request-reset' && <div className="auth-field">
+              <label htmlFor="login-password">{mode === 'login' ? 'Password' : 'Password baru'}</label>
+              <div className="auth-input-row"><LockKeyhole aria-hidden="true" size={19} /><input id="login-password" type={showPassword ? 'text' : 'password'} placeholder={mode === 'login' ? 'Password' : 'Password baru'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'reset-password' ? 8 : undefined} required value={password} onChange={event => setPassword(event.target.value)} /><button type="button" className="auth-eye" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>
+            </div>}
+            {mode === 'reset-password' && <div className="auth-field">
+              <label htmlFor="login-confirm-password">Konfirmasi password</label>
+              <div className="auth-input-row"><LockKeyhole aria-hidden="true" size={19} /><input id="login-confirm-password" type={showPassword ? 'text' : 'password'} placeholder="Ulangi password baru" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></div>
+            </div>}
+            {mode === 'login' && <div className="auth-options"><button type="button" onClick={() => switchMode('request-reset')}>Lupa password?</button></div>}
+            {error && <p role="alert" className="auth-alert">{error}</p>}
+            {notice && <p role="status" className="auth-notice">{notice}</p>}
+            <button className="auth-submit" type="submit" disabled={busy || loading}>
+              <span>{loading ? 'Memuat sesi...' : busy ? 'Memproses...' : mode === 'login' ? 'Masuk' : mode === 'request-reset' ? 'Kirim tautan' : 'Simpan password'}</span>
+              <span className="auth-door"><DoorOpen size={23} aria-hidden="true" /></span>
+            </button>
+            {mode !== 'login' && <button type="button" className="auth-back" onClick={() => switchMode('login')}>Kembali ke masuk</button>}
+          </form>}
+        <p className="auth-footer">Akun dikelola administrator toko.</p>
+      </section>
+    </div>
   </main>
 }
