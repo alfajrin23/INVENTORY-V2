@@ -1,4 +1,4 @@
-import { Pencil, Save, Trash2 } from 'lucide-react'
+import { Pencil, Save, Trash2, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -102,7 +102,7 @@ export function TransactionRevisionDialog({ item, action, onClose }: { item: His
         </>}
         {error && <p role="alert" className="text-sm text-rose-200">{error}</p>}
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>Batal</Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}><X className="size-4" />Batal</Button>
           <Button type="submit" disabled={busy || !initialProduct} className={deleting ? 'bg-rose-300 text-slate-950 hover:bg-rose-200' : 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'}>
             {deleting ? <Trash2 className="size-4" /> : <Save className="size-4" />}
             {busy ? 'Memproses...' : deleting ? 'Hapus transaksi' : 'Simpan perubahan'}
