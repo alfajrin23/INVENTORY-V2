@@ -82,6 +82,7 @@ export async function showInventoryNotification(storeName: string, products: Pro
     actionTypeId: INVENTORY_NOTIFICATION_ACTIONS,
     ongoing: true,
     autoCancel: false,
+    isExactNotification: false,
     smallIcon: 'ic_stat_inventory',
     largeIcon: 'ic_inventory_gradient',
     iconColor: '#0D9488',
