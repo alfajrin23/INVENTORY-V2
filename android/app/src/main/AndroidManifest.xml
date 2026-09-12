@@ -48,6 +48,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Inventory hanya memakai notifikasi langsung/persisten, bukan exact alarm. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" tools:node="remove" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

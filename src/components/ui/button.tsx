@@ -1,4 +1,5 @@
 import * as React from "react"
+import { ArrowLeft, ArrowRight, CheckCircle2, CircleDot, LayoutDashboard, Save, Sparkles, WandSparkles, X } from "lucide-react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
 
@@ -41,17 +42,47 @@ const buttonVariants = cva(
   }
 )
 
+function buttonText(children: React.ReactNode) {
+  return React.Children.toArray(children)
+    .filter((child): child is string | number => typeof child === "string" || typeof child === "number")
+    .join(" ")
+    .trim()
+}
+
+function hasVisualChild(children: React.ReactNode) {
+  return React.Children.toArray(children).some((child) => React.isValidElement(child))
+}
+
+function AutomaticButtonIcon({ text }: { text: string }) {
+  const props = { className: "size-4", "aria-hidden": true as const }
+  if (/batal|batalkan|tutup|close/i.test(text)) return <X {...props} />
+  if (/kembali|prev|sebelumnya/i.test(text)) return <ArrowLeft {...props} />
+  if (/next|berikutnya|lanjut/i.test(text)) return <ArrowRight {...props} />
+  if (/simpan|save/i.test(text)) return <Save {...props} />
+  if (/oke|selesai|konfirmasi|proses|update/i.test(text)) return <CheckCircle2 {...props} />
+  if (/dashboard/i.test(text)) return <LayoutDashboard {...props} />
+  if (/pahami/i.test(text)) return <Sparkles {...props} />
+  if (/contoh/i.test(text)) return <WandSparkles {...props} />
+  return <CircleDot {...props} />
+}
+
 function Button({
   className,
   variant = "default",
   size = "default",
   asChild = false,
+  children,
   ...props
 }: React.ComponentProps<"button"> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
+  const text = buttonText(children)
+  const showAutomaticIcon = !asChild
+    && !String(size).startsWith("icon")
+    && Boolean(text)
+    && !hasVisualChild(children)
 
   return (
     <Comp
@@ -60,7 +91,10 @@ function Button({
       data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+    >
+      {showAutomaticIcon ? <AutomaticButtonIcon text={text} /> : null}
+      {children}
+    </Comp>
   )
 }
 
