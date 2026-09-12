@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+import { readInventoryCache, writeInventoryCache } from '@/lib/inventory-cache'
 import { getInventoryRepository } from '@/lib/inventory-service'
 import type {
   HistoryItem,
@@ -36,6 +37,10 @@ const emptySnapshot: InventorySnapshot = {
   history: [],
 }
 
+const BACKGROUND_REFRESH_STALE_MS = 2 * 60 * 1000
+const BACKGROUND_REFRESH_INTERVAL_MS = 5 * 60 * 1000
+const RECONNECT_REFRESH_STALE_MS = 30 * 1000
+
 const InventoryContext = createContext<InventoryContextValue | null>(null)
 const repository = getInventoryRepository()
 
@@ -51,6 +56,19 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
   const requestEpoch = useRef(0)
   const productsReadyRef = useRef(false)
   const lastRefreshAt = useRef(0)
+
+  const commitSnapshot = useCallback((next: InventorySnapshot) => {
+    setSnapshot(next)
+    void writeInventoryCache(next)
+  }, [])
+
+  const updateSnapshot = useCallback((updater: (current: InventorySnapshot) => InventorySnapshot) => {
+    setSnapshot(current => {
+      const next = updater(current)
+      void writeInventoryCache(next)
+      return next
+    })
+  }, [])
 
   const refresh = useCallback(async (background = false) => {
     const version = ++generation.current
@@ -73,7 +91,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         lastRefreshAt.current = Date.now()
         productsReadyRef.current = true
         setProductsReady(true)
-        setSnapshot(next)
+        commitSnapshot(next)
       }
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Gagal memuat data inventory'
@@ -82,20 +100,39 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       if (snapshotRequest.current === request) snapshotRequest.current = null
       if (version === generation.current) setLoading(false)
     }
-  }, [])
+  }, [commitSnapshot])
 
   useEffect(() => {
-    void refresh()
+    let cancelled = false
+    void (async () => {
+      const cached = await readInventoryCache()
+      if (cancelled) return
+
+      if (cached) {
+        productsReadyRef.current = true
+        setProductsReady(true)
+        setSnapshot(cached.snapshot)
+        setLoading(false)
+        lastRefreshAt.current = cached.savedAt
+        void refresh(true)
+      } else {
+        void refresh()
+      }
+    })()
+
+    return () => { cancelled = true }
   }, [refresh])
 
-  const mergeResult = useCallback((result: TransactionResult) => {
-    setSnapshot(current => ({
+  const mergeResult = useCallback((result: TransactionResult & { deletedId?: string }) => {
+    updateSnapshot(current => ({
       ...current,
       products: current.products.map(p => result.products.find(next => next.id === p.id && next.storeId === current.activeStore?.id) ?? p),
-      history: [...result.history.filter(h => h.storeId === current.activeStore?.id), ...current.history.filter(h => !result.history.some(n => n.id === h.id))]
-        .sort((a, b) => b.tanggal.localeCompare(a.tanggal)),
+      history: [
+        ...result.history.filter(h => h.storeId === current.activeStore?.id),
+        ...current.history.filter(h => h.id !== result.deletedId && !result.history.some(n => n.id === h.id)),
+      ].sort((a, b) => b.tanggal.localeCompare(a.tanggal)),
     }))
-  }, [])
+  }, [updateSnapshot])
 
   const exclusive = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
     if (mutation.current) throw new Error('Permintaan sedang diproses. Tunggu sebentar.')
@@ -108,32 +145,77 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const update = () => {
-      if (!mutation.current && !snapshotRequest.current && document.visibilityState === 'visible' && Date.now() - lastRefreshAt.current > 15000) void refresh(true)
+      if (
+        !mutation.current
+        && !snapshotRequest.current
+        && document.visibilityState === 'visible'
+        && Date.now() - lastRefreshAt.current > BACKGROUND_REFRESH_STALE_MS
+      ) void refresh(true)
     }
-    const reconnect = () => { if (!mutation.current && !snapshotRequest.current) void refresh(true) }
+    const reconnect = () => {
+      if (
+        !mutation.current
+        && !snapshotRequest.current
+        && Date.now() - lastRefreshAt.current > RECONNECT_REFRESH_STALE_MS
+      ) void refresh(true)
+    }
     window.addEventListener('focus', update)
     window.addEventListener('online', reconnect)
-    const timer = window.setInterval(update, 60000)
-    return () => { window.removeEventListener('focus', update); window.removeEventListener('online', reconnect); window.clearInterval(timer) }
+    const timer = window.setInterval(update, BACKGROUND_REFRESH_INTERVAL_MS)
+    return () => {
+      window.removeEventListener('focus', update)
+      window.removeEventListener('online', reconnect)
+      window.clearInterval(timer)
+    }
   }, [refresh])
 
   const value = useMemo<InventoryContextValue>(() => ({
     ...snapshot, loading, productsReady, error, mode: repository.mode, refresh,
     setActiveStore: storeId => exclusive(async () => {
       if (snapshot.activeStore?.id === storeId) return
-      if (!snapshot.stores.some(s => s.id === storeId)) throw new Error('Toko tidak ditemukan')
+      const activeStore = snapshot.stores.find(s => s.id === storeId)
+      if (!activeStore) throw new Error('Toko tidak ditemukan')
+
       await repository.setActiveStore(storeId)
-      productsReadyRef.current = false
-      setProductsReady(false)
-      setSnapshot(current => ({ ...current, activeStore: current.stores.find(s => s.id === storeId) ?? null, products: [], history: [] }))
-      await refresh()
+      const cached = await readInventoryCache(storeId)
+      productsReadyRef.current = Boolean(cached)
+      setProductsReady(Boolean(cached))
+      setSnapshot(current => ({
+        ...current,
+        activeStore,
+        products: cached?.snapshot.products ?? [],
+        history: cached?.snapshot.history ?? [],
+      }))
+      if (cached) setLoading(false)
+      await refresh(Boolean(cached))
     }),
-    addStore: store => exclusive(async () => { const created = await repository.addStore(store); await refresh(); return created }),
-    updateStore: (id, store) => exclusive(async () => { await repository.updateStore(id, store); await refresh() }),
+    addStore: store => exclusive(async () => {
+      const created = await repository.addStore(store)
+      productsReadyRef.current = true
+      setProductsReady(true)
+      updateSnapshot(current => ({
+        stores: [created, ...current.stores.filter(item => item.id !== created.id)],
+        activeStore: created,
+        products: [],
+        history: [],
+      }))
+      return created
+    }),
+    updateStore: (id, store) => exclusive(async () => {
+      await repository.updateStore(id, store)
+      updateSnapshot(current => {
+        const stores = current.stores.map(item => item.id === id ? { ...item, ...store } : item)
+        return {
+          ...current,
+          stores,
+          activeStore: current.activeStore?.id === id ? stores.find(item => item.id === id) ?? null : current.activeStore,
+        }
+      })
+    }),
     deleteStore: id => exclusive(async () => { await repository.deleteStore(id); await refresh() }),
     addProduct: product => exclusive(async () => {
       const created = await repository.addProduct(product)
-      setSnapshot(current => ({ ...current, products: current.activeStore?.id === created.storeId ? [created, ...current.products] : current.products }))
+      updateSnapshot(current => ({ ...current, products: current.activeStore?.id === created.storeId ? [created, ...current.products] : current.products }))
     }),
     updateProduct: (id, product, expectedStock) => exclusive(async () => {
       const old = snapshot.products.find(p => p.id === id)
@@ -142,7 +224,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     }),
     deleteProduct: id => exclusive(async () => {
       await repository.deleteProduct(id)
-      setSnapshot(current => ({ ...current, products: current.products.filter(p => p.id !== id) }))
+      updateSnapshot(current => ({ ...current, products: current.products.filter(p => p.id !== id) }))
     }),
     processTransaction: input => exclusive(async () => {
       if (!snapshot.activeStore) throw new Error('Pilih toko terlebih dahulu')
@@ -167,10 +249,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     }),
     reviseTransaction: (current, change) => exclusive(async () => {
       if (current.storeId !== snapshot.activeStore?.id) throw new Error('Transaksi bukan milik toko aktif')
-      await repository.reviseTransaction(current, change)
-      await refresh(true)
+      mergeResult(await repository.reviseTransaction(current, change))
     }),
-  }), [snapshot, loading, productsReady, error, refresh, mergeResult, exclusive])
+  }), [snapshot, loading, productsReady, error, refresh, mergeResult, exclusive, updateSnapshot])
 
   return <InventoryContext.Provider value={value}>{children}</InventoryContext.Provider>
 }
