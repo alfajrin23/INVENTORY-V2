@@ -53,6 +53,14 @@ function requestResult<T>(request: IDBRequest<T>) {
   })
 }
 
+function transactionDone(transaction: IDBTransaction) {
+  return new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error ?? new Error('Transaksi cache dibatalkan'))
+    transaction.onerror = () => reject(transaction.error ?? new Error('Transaksi cache gagal'))
+  })
+}
+
 export async function readInventoryCache(storeId?: string): Promise<CachedInventory | null> {
   const scope = await cacheScope()
   const selectedStoreId = storeId ?? localStorage.getItem('activeStoreId') ?? ''
@@ -89,6 +97,7 @@ export async function writeInventoryCache(snapshot: InventorySnapshot) {
       snapshot,
     }
     transaction.objectStore(STORE_NAME).put(record)
+    await transactionDone(transaction)
   } catch {
     // Cache is an acceleration layer only. Network data remains the source of truth.
   } finally {
