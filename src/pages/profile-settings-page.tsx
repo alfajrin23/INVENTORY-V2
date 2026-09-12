@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, Edit3, MapPin, Plus, Store, Trash2, Upload } from 'lucide-react'
+import { Camera, CheckCircle2, Edit3, MapPin, Plus, Store, Trash2, Upload, X } from 'lucide-react'
 import { useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -331,6 +331,7 @@ export function ProfileSettingsPage() {
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setStoreDialogOpen(false)}>
+              <X className="size-4" />
               Batal
             </Button>
             <Button type="button" onClick={() => void saveStore()} disabled={saving} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
