@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { DoorOpen, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
+import { ArrowLeft, DoorOpen, Eye, EyeOff, KeyRound, LockKeyhole, Mail } from 'lucide-react'
 
 import { demoEnabled, supabase, requireSupabase } from '@/lib/supabase'
 import './auth-gate.css'
@@ -94,14 +94,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
               <label htmlFor="login-confirm-password">Konfirmasi password</label>
               <div className="auth-input-row"><LockKeyhole aria-hidden="true" size={19} /><input id="login-confirm-password" type={showPassword ? 'text' : 'password'} placeholder="Ulangi password baru" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></div>
             </div>}
-            {mode === 'login' && <div className="auth-options"><button type="button" onClick={() => switchMode('request-reset')}>Lupa password?</button></div>}
+            {mode === 'login' && <div className="auth-options"><button type="button" onClick={() => switchMode('request-reset')}><KeyRound size={14} aria-hidden="true" />Lupa password?</button></div>}
             {error && <p role="alert" className="auth-alert">{error}</p>}
             {notice && <p role="status" className="auth-notice">{notice}</p>}
             <button className="auth-submit" type="submit" disabled={busy || loading}>
               <span>{loading ? 'Memuat sesi...' : busy ? 'Memproses...' : mode === 'login' ? 'Masuk' : mode === 'request-reset' ? 'Kirim tautan' : 'Simpan password'}</span>
               <span className="auth-door"><DoorOpen size={23} aria-hidden="true" /></span>
             </button>
-            {mode !== 'login' && <button type="button" className="auth-back" onClick={() => switchMode('login')}>Kembali ke masuk</button>}
+            {mode !== 'login' && <button type="button" className="auth-back" onClick={() => switchMode('login')}><ArrowLeft size={14} aria-hidden="true" />Kembali ke masuk</button>}
           </form>}
         <p className="auth-footer">Akun dikelola administrator toko.</p>
       </section>
