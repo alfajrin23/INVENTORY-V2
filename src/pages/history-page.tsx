@@ -1,5 +1,5 @@
-import { ArrowDownCircle, ArrowUpCircle, CalendarDays, Filter, Plus, ScanLine, Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { ArrowDownCircle, ArrowUpCircle, CalendarDays, ChevronLeft, ChevronRight, Filter, Plus, ScanLine, Search } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
 import { TransactionActions, TransactionRevisionDialog, type RevisionAction } from '@/components/inventory/transaction-revision-dialog'
@@ -21,17 +21,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useInventory } from '@/hooks/use-inventory'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { useToast } from '@/hooks/use-toast'
 import { dateTimeLabel, formatCurrency, matchProduct, toInputDate } from '@/lib/format'
 import type { HistoryItem, Product, TransactionCategory } from '@/lib/types'
 
 type CategoryFilter = 'semua' | TransactionCategory
 
+const HISTORY_PER_PAGE = 40
+
 export function HistoryPage() {
   const { products, history, loading, error, refresh, processTransaction } = useInventory()
   const { showToast } = useToast()
+  const desktop = useMediaQuery('(min-width: 1024px)')
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('semua')
+  const [page, setPage] = useState(0)
   const [formOpen, setFormOpen] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [formCategory, setFormCategory] = useState<TransactionCategory>('masuk')
@@ -56,6 +61,15 @@ export function HistoryPage() {
       return matchesCategory && matchesSearch
     })
   }, [categoryFilter, history, search])
+
+  const lastPage = Math.max(0, Math.ceil(filteredHistory.length / HISTORY_PER_PAGE) - 1)
+  const visiblePage = Math.min(page, lastPage)
+  const visibleHistory = useMemo(
+    () => filteredHistory.slice(visiblePage * HISTORY_PER_PAGE, (visiblePage + 1) * HISTORY_PER_PAGE),
+    [filteredHistory, visiblePage],
+  )
+
+  useEffect(() => { setPage(0) }, [search, categoryFilter])
 
   const productSuggestions = useMemo(() => {
     if (!productQuery.trim()) {
@@ -178,76 +192,95 @@ export function HistoryPage() {
       </GlassPanel>
 
       <GlassPanel className="overflow-hidden p-0" glow="emerald">
-        {loading ? (
+        {loading && !history.length ? (
           <div className="p-5">
             <TableSkeleton rows={8} />
           </div>
         ) : filteredHistory.length ? (
           <>
-            <div className="hidden max-h-[650px] overflow-auto lg:block">
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-[#17213a]/95">
-                  <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="text-white/62">ID</TableHead>
-                    <TableHead className="text-white/62">Nama Barang</TableHead>
-                    <TableHead className="text-white/62">Brand</TableHead>
-                    <TableHead className="text-white/62">Qty</TableHead>
-                    <TableHead className="text-white/62">Tanggal</TableHead>
-                    <TableHead className="text-white/62">Keterangan</TableHead>
-                    <TableHead className="text-right text-white/62">Nilai</TableHead>
-                    <TableHead className="text-right text-white/62">Aksi</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredHistory.map((item, index) => (
-                    <TableRow key={item.id} className="border-white/10 hover:bg-white/[0.05]">
-                      <TableCell className="font-mono text-white/52">{index + 1}</TableCell>
-                      <TableCell>
-                        <p className="font-semibold text-white">{item.namaBarang}</p>
-                        <p className="font-mono text-xs text-white/42">{item.barcode}</p>
-                      </TableCell>
-                      <TableCell className="text-white/70">{item.brand}</TableCell>
-                      <TableCell className="font-mono text-white">{item.jumlah}</TableCell>
-                      <TableCell className="text-white/62">{dateTimeLabel(item.tanggal)}</TableCell>
-                      <TableCell>
-                        <Badge className={item.kategori === 'keluar' ? 'bg-rose-300/14 text-rose-100' : 'bg-emerald-300/14 text-emerald-100'}>
-                          {item.kategori === 'keluar' ? 'Barang Keluar' : 'Barang Masuk'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</TableCell>
-                      <TableCell><TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} /></TableCell>
+            {desktop ? (
+              <div className="max-h-[650px] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-[#17213a]/95">
+                    <TableRow className="border-white/10 hover:bg-transparent">
+                      <TableHead className="text-white/62">ID</TableHead>
+                      <TableHead className="text-white/62">Nama Barang</TableHead>
+                      <TableHead className="text-white/62">Brand</TableHead>
+                      <TableHead className="text-white/62">Qty</TableHead>
+                      <TableHead className="text-white/62">Tanggal</TableHead>
+                      <TableHead className="text-white/62">Keterangan</TableHead>
+                      <TableHead className="text-right text-white/62">Nilai</TableHead>
+                      <TableHead className="text-right text-white/62">Aksi</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {visibleHistory.map((item, index) => (
+                      <TableRow key={item.id} className="border-white/10 hover:bg-white/[0.05]">
+                        <TableCell className="font-mono text-white/52">{visiblePage * HISTORY_PER_PAGE + index + 1}</TableCell>
+                        <TableCell>
+                          <p className="font-semibold text-white">{item.namaBarang}</p>
+                          <p className="font-mono text-xs text-white/42">{item.barcode}</p>
+                        </TableCell>
+                        <TableCell className="text-white/70">{item.brand}</TableCell>
+                        <TableCell className="font-mono text-white">{item.jumlah}</TableCell>
+                        <TableCell className="text-white/62">{dateTimeLabel(item.tanggal)}</TableCell>
+                        <TableCell>
+                          <Badge className={item.kategori === 'keluar' ? 'bg-rose-300/14 text-rose-100' : 'bg-emerald-300/14 text-emerald-100'}>
+                            {item.kategori === 'keluar' ? 'Barang Keluar' : 'Barang Masuk'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</TableCell>
+                        <TableCell><TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} /></TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="space-y-3 p-4">
+                {visibleHistory.map((item) => (
+                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.055] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-white">{item.namaBarang}</p>
+                        <p className="text-sm text-white/52">{item.brand} · Qty {item.jumlah}</p>
+                      </div>
+                      <Badge className={item.kategori === 'keluar' ? 'bg-rose-300/14 text-rose-100' : 'bg-emerald-300/14 text-emerald-100'}>
+                        {item.kategori}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-white/42">Tanggal</p>
+                        <p className="text-white/78">{dateTimeLabel(item.tanggal)}</p>
+                      </div>
+                      <div>
+                        <p className="text-white/42">Nilai</p>
+                        <p className="font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</p>
+                      </div>
+                    </div>
+                    <TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} />
+                  </div>
+                ))}
+              </div>
+            )}
 
-            <div className="space-y-3 p-4 lg:hidden">
-              {filteredHistory.map((item) => (
-                <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.055] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">{item.namaBarang}</p>
-                      <p className="text-sm text-white/52">{item.brand} ? Qty {item.jumlah}</p>
-                    </div>
-                    <Badge className={item.kategori === 'keluar' ? 'bg-rose-300/14 text-rose-100' : 'bg-emerald-300/14 text-emerald-100'}>
-                      {item.kategori}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-white/42">Tanggal</p>
-                      <p className="text-white/78">{dateTimeLabel(item.tanggal)}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/42">Nilai</p>
-                      <p className="font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</p>
-                    </div>
-                  </div>
-                  <TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} />
+            {filteredHistory.length > HISTORY_PER_PAGE ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-4 py-3 text-sm text-white/60">
+                <span>
+                  {visiblePage * HISTORY_PER_PAGE + 1}-{Math.min((visiblePage + 1) * HISTORY_PER_PAGE, filteredHistory.length)} dari {filteredHistory.length} transaksi
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" aria-label="Halaman history sebelumnya" disabled={visiblePage === 0} onClick={() => setPage(visiblePage - 1)}>
+                    <ChevronLeft className="size-4" />
+                  </Button>
+                  <span className="min-w-14 text-center">{visiblePage + 1}/{lastPage + 1}</span>
+                  <Button type="button" variant="outline" size="icon" aria-label="Halaman history berikutnya" disabled={visiblePage === lastPage} onClick={() => setPage(visiblePage + 1)}>
+                    <ChevronRight className="size-4" />
+                  </Button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : null}
           </>
         ) : (
           <div className="p-5">
