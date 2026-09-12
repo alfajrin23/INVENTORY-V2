@@ -15,6 +15,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [coverEyes, setCoverEyes] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
@@ -38,7 +39,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   if (session && mode !== 'reset-password') return <div key={session.user.id}>{children}</div>
 
   const switchMode = (next: AuthMode) => {
-    setMode(next); setError(''); setNotice(''); setPassword(''); setConfirmPassword(''); setShowPassword(false)
+    setMode(next); setError(''); setNotice(''); setPassword(''); setConfirmPassword(''); setShowPassword(false); setCoverEyes(false)
   }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -76,7 +77,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <span><strong>ABElektronik</strong><small>Inventory</small></span>
     </header>
     <div className="auth-shell">
-      <div className="auth-mascot" aria-hidden="true"><img src="/husky-login.png" alt="" draggable={false} /></div>
+      <div className={`auth-mascot${coverEyes ? ' auth-mascot--covered' : ''}`} aria-hidden="true">
+        <img className="auth-mascot-open" src="/husky-login.png" alt="" draggable={false} />
+        <img className="auth-mascot-covered" src="/husky-password.png" alt="" draggable={false} />
+      </div>
       <section className="auth-panel" aria-label={title}>
         <h1>{title}</h1>
         <p className="auth-intro">{mode === 'login' ? 'Selamat datang kembali. Husky menjaga toko Anda.' : mode === 'request-reset' ? 'Masukkan email akun untuk menerima tautan pemulihan.' : 'Masukkan password baru untuk akun Anda.'}</p>
@@ -84,13 +88,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
           <form onSubmit={submit} className="auth-form">
             {mode !== 'reset-password' && <div className="auth-field">
               <label htmlFor="login-email">Email</label>
-              <div className="auth-input-row"><Mail aria-hidden="true" size={19} /><input id="login-email" type="email" placeholder="email@toko.com" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} /></div>
+              <div className="auth-input-row"><Mail aria-hidden="true" size={19} /><input id="login-email" type="email" placeholder="email@toko.com" autoComplete="username" required value={email} onFocus={() => setCoverEyes(false)} onChange={event => setEmail(event.target.value)} /></div>
             </div>}
-            {mode !== 'request-reset' && <div className="auth-field">
+            {mode !== 'request-reset' && <div className="auth-field" onFocusCapture={() => setCoverEyes(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setCoverEyes(false) }}>
               <label htmlFor="login-password">{mode === 'login' ? 'Password' : 'Password baru'}</label>
               <div className="auth-input-row"><LockKeyhole aria-hidden="true" size={19} /><input id="login-password" type={showPassword ? 'text' : 'password'} placeholder={mode === 'login' ? 'Password' : 'Password baru'} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} minLength={mode === 'reset-password' ? 8 : undefined} required value={password} onChange={event => setPassword(event.target.value)} /><button type="button" className="auth-eye" aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} title={showPassword ? 'Sembunyikan password' : 'Tampilkan password'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div>
             </div>}
-            {mode === 'reset-password' && <div className="auth-field">
+            {mode === 'reset-password' && <div className="auth-field" onFocusCapture={() => setCoverEyes(true)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setCoverEyes(false) }}>
               <label htmlFor="login-confirm-password">Konfirmasi password</label>
               <div className="auth-input-row"><LockKeyhole aria-hidden="true" size={19} /><input id="login-confirm-password" type={showPassword ? 'text' : 'password'} placeholder="Ulangi password baru" autoComplete="new-password" minLength={8} required value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} /></div>
             </div>}
