@@ -25,4 +25,8 @@ npm test
 - SQL migration: `supabase/migrations/`
 - Konversi backup offline: `scripts/prepare-firebase-import.mjs`
 
-Rute legacy seperti `/databarang.html`, `/history.html`, dan `/laporanpendapatan.html` dipertahankan. Tidak ada Firebase runtime SDK. Voice menggunakan SpeechRecognition browser dan parser lokal; setiap transaksi wajib dikonfirmasi. Browser tanpa SpeechRecognition dapat memakai input teks atau dikte keyboard.
+Rute legacy seperti `/databarang.html`, `/history.html`, dan `/laporanpendapatan.html` dipertahankan. Tidak ada Firebase runtime SDK. Voice di web menggunakan SpeechRecognition browser, sedangkan APK memakai pengenal suara native Android. Parser berjalan lokal dan setiap transaksi wajib dikonfirmasi. Browser tanpa SpeechRecognition dapat memakai input teks atau dikte keyboard.
+
+## Android
+
+Jalankan `npm run android:apk` untuk menyinkronkan Capacitor dan membuat `release/ABElektronik-Inventory-debug.apk`. APK meminta izin mikrofon saat Voice AI dipakai dan izin notifikasi saat aplikasi dibuka. Notifikasi panel menampilkan ringkasan toko, jumlah produk, stok menipis, serta tombol Voice AI dan Lihat stok. Tombol lonceng di aplikasi dapat meminta ulang izin notifikasi. Pengenalan suara memerlukan layanan pengenal suara yang aktif di perangkat Android.

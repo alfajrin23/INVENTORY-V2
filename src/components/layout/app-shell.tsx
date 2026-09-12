@@ -1,4 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Capacitor } from '@capacitor/core'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import {
   Bell,
   ChevronDown,
@@ -10,7 +12,7 @@ import {
   Search,
   Sun,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { TransactionWorkflow } from '@/components/inventory/transaction-workflow'
@@ -30,6 +32,7 @@ import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { buildWhatsAppSummary, matchProduct } from '@/lib/format'
 import { mobileNavigation, navigationItems, routes } from '@/lib/navigation'
+import { clearInventoryNotification, inventoryNotificationContent, registerInventoryNotification, showInventoryNotification } from '@/lib/android-notifications'
 import { cn } from '@/lib/utils'
 
 function isActive(currentPath: string, targetPath: string) {
@@ -45,10 +48,14 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const reduceMotion = useReducedMotion()
-  const { activeStore, stores, products, history, mode, setActiveStore } = useInventory()
+  const { activeStore, stores, products, history, loading, mode, setActiveStore } = useInventory()
   const { showToast } = useToast()
   const [scanOpen, setScanOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
+  const [notificationReady, setNotificationReady] = useState(false)
+  const lastNotificationSignature = useRef('')
+  const loadingRef = useRef(loading)
+  const pendingNotificationVoice = useRef(false)
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window === 'undefined') {
       return 'dark'
@@ -79,6 +86,86 @@ export function AppShell() {
     document.documentElement.classList.toggle('light', theme === 'light')
     localStorage.setItem('theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    loadingRef.current = loading
+    if (loading || !pendingNotificationVoice.current) return
+    pendingNotificationVoice.current = false
+    const timer = window.setTimeout(() => setVoiceOpen(true), 0)
+    return () => window.clearTimeout(timer)
+  }, [loading])
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+    let closed = false
+    let removeListener: (() => Promise<void>) | undefined
+    const setup = async () => {
+      const listener = await LocalNotifications.addListener('localNotificationActionPerformed', action => {
+        navigate(routes.dashboard)
+        if (action.actionId === 'voice') {
+          if (loadingRef.current) pendingNotificationVoice.current = true
+          else setVoiceOpen(true)
+        }
+      })
+      removeListener = () => listener.remove()
+      if (closed) { await listener.remove(); return }
+      await registerInventoryNotification()
+      let permission = await LocalNotifications.checkPermissions()
+      if (permission.display === 'prompt') permission = await LocalNotifications.requestPermissions()
+      if (!closed && permission.display === 'granted') setNotificationReady(true)
+    }
+    void setup().catch(() => undefined)
+    return () => {
+      closed = true
+      if (removeListener) void removeListener()
+      void clearInventoryNotification().catch(() => undefined)
+    }
+  }, [navigate])
+
+  const notificationContent = useMemo(
+    () => inventoryNotificationContent(activeStore?.name ?? 'ABElektronik', products),
+    [activeStore?.name, products],
+  )
+  const notificationDetails = notificationContent.inboxList.join('|')
+  const notificationSignature = `${activeStore?.id ?? ''}|${notificationContent.title}|${notificationContent.body}|${notificationDetails}`
+  useEffect(() => {
+    if (!notificationReady || loading) return
+    if (!activeStore) {
+      lastNotificationSignature.current = ''
+      void clearInventoryNotification().catch(() => undefined)
+      return
+    }
+    if (lastNotificationSignature.current === notificationSignature) return
+    const timer = window.setTimeout(() => {
+      void showInventoryNotification(activeStore.name, products)
+        .then(() => { lastNotificationSignature.current = notificationSignature })
+        .catch(() => undefined)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [activeStore, loading, notificationReady, notificationSignature, products])
+
+  const enableNotifications = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      showToast('Notifikasi panel tersedia di aplikasi Android.', 'success')
+      return
+    }
+    try {
+      const permission = await LocalNotifications.requestPermissions()
+      if (permission.display !== 'granted') {
+        showToast('Izin notifikasi belum aktif. Izinkan notifikasi ABElektronik di Pengaturan Android.', 'error')
+        return
+      }
+      await registerInventoryNotification()
+      setNotificationReady(true)
+      if (activeStore) {
+        await showInventoryNotification(activeStore.name, products)
+        lastNotificationSignature.current = notificationSignature
+      }
+      showToast('Notifikasi inventory aktif di panel Android.', 'success')
+    } catch {
+      showToast('Notifikasi Android gagal diaktifkan.', 'error')
+    }
+  }
 
   const handleShutdown = () => {
     const phone = localStorage.getItem('whatsappPhone') ?? ''
@@ -233,7 +320,10 @@ export function AppShell() {
             type="button"
             variant="outline"
             size="icon-lg"
-            className="hidden border-white/12 bg-white/[0.07] text-white hover:bg-white/12 lg:inline-flex"
+            aria-label="Aktifkan notifikasi Android"
+            title="Aktifkan notifikasi Android"
+            onClick={() => void enableNotifications()}
+            className="border-white/12 bg-white/[0.07] text-white hover:bg-white/12"
           >
             <Bell className="size-4" />
           </Button>

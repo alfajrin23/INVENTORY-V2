@@ -73,6 +73,57 @@ test('barcode lookup fills product draft from store, scan text and brand referen
   expect(lookupScannedProduct('Jepi lampu 12 watt kode 7788',[])).toMatchObject({ barcode:'7788', namaBarang:'Lampu LED', brand:'Jepi' })
 })
 
+test('Android native voice works with granted microphone permission and shade action opens voice', async ({ page }) => {
+  await page.addInitScript(() => {
+    const calls: string[] = []
+    const requests: { plugin: string; method: string; options: unknown }[] = []
+    const listeners: Record<string, (event: { actionId: string }) => void> = {}
+    const methods = (names: string[]) => names.map(name => ({ name, rtype: name === 'addListener' ? 'callback' : 'promise' }))
+    const fakeWindow = window as typeof window & {
+      androidBridge: object
+      Capacitor: object
+      nativeCalls: string[]
+      nativeRequests: typeof requests
+      nativeListeners: typeof listeners
+    }
+    fakeWindow.androidBridge = {}
+    fakeWindow.nativeCalls = calls
+    fakeWindow.nativeRequests = requests
+    fakeWindow.nativeListeners = listeners
+    fakeWindow.Capacitor = {
+      PluginHeaders: [
+        { name: 'SpeechRecognition', methods: methods(['checkPermissions', 'requestPermissions', 'available', 'start', 'stop']) },
+        { name: 'LocalNotifications', methods: methods(['addListener', 'removeListener', 'createChannel', 'registerActionTypes', 'checkPermissions', 'requestPermissions', 'schedule', 'cancel', 'removeDeliveredNotificationsById']) },
+      ],
+      nativeCallback: (_plugin: string, _method: string, options: { eventName: string }, callback: (event: { actionId: string }) => void) => {
+        listeners[options.eventName] = callback
+        return Promise.resolve('listener-1')
+      },
+      nativePromise: (plugin: string, method: string, options: unknown) => {
+        calls.push(`${plugin}.${method}`)
+        requests.push({ plugin, method, options })
+        if (method === 'checkPermissions' || method === 'requestPermissions') {
+          return Promise.resolve(plugin === 'SpeechRecognition' ? { speechRecognition: 'granted' } : { display: 'granted' })
+        }
+        if (method === 'available') return Promise.resolve({ available: true })
+        if (method === 'start') return Promise.resolve({ matches: ['transaksi lampu Philips dua'] })
+        return Promise.resolve({})
+      },
+    }
+    Object.defineProperty(window, 'SpeechRecognition', { value: class { start() { throw new Error('WebView speech must not run') } } })
+  })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Buka Voice AI' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Periksa dan konfirmasi')
+  expect(await page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls)).toContain('SpeechRecognition.start')
+  expect(await page.evaluate(() => (window as typeof window & { nativeRequests: { plugin: string; method: string; options: unknown }[] }).nativeRequests.find(request => request.plugin === 'SpeechRecognition' && request.method === 'start')?.options)).toMatchObject({ language: 'id-ID', popup: true })
+  await page.getByRole('button', { name: 'Batalkan' }).click()
+  await page.evaluate(() => (window as typeof window & { nativeListeners: Record<string, (event: { actionId: string }) => void> }).nativeListeners.localNotificationActionPerformed({ actionId: 'voice' }))
+  await expect(page.getByRole('dialog')).toContainText('Voice AI')
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls.includes('LocalNotifications.schedule'))).toBe(true)
+  expect(await page.evaluate(() => (window as typeof window & { nativeRequests: { plugin: string; method: string; options: { notifications?: { actionTypeId?: string }[] } }[] }).nativeRequests.find(request => request.plugin === 'LocalNotifications' && request.method === 'schedule')?.options.notifications?.[0]?.actionTypeId)).toBe('inventory_actions')
+})
+
 for (const width of [320,360,375,390,412,430,768,1440]) {
   test(`all routes load without overflow or console errors at ${width}px`, async ({ page }) => {
     await page.setViewportSize({width,height:900})

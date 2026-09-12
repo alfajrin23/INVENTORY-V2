@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
+import { SpeechRecognition } from '@capgo/capacitor-speech-recognition'
 import { CheckCircle2, Mic, PackagePlus, ScanLine, Square, TriangleAlert } from 'lucide-react'
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -91,11 +93,19 @@ export function VoiceDialog({
   const alive = useRef(true)
   const latestTranscript = useRef('')
   const failed = useRef(false)
+  const nativeSession = useRef(false)
+  const nativeGeneration = useRef(0)
 
   const cancelAudio = () => {
+    nativeGeneration.current += 1
     if (timer.current) clearTimeout(timer.current)
+    timer.current = null
     const current = recognition.current; recognition.current = null
     if (current) { current.onend = null; current.onresult = null; current.onerror = null; current.onstart = null; current.abort() }
+    if (nativeSession.current) {
+      nativeSession.current = false
+      void SpeechRecognition.stop().catch(() => undefined)
+    }
   }
 
   const focusTextFallback = () => {
@@ -185,8 +195,51 @@ export function VoiceDialog({
     } catch (e) { setError(e instanceof Error ? e.message : 'Saya belum memahami perintah tersebut.'); setState('error') }
   }
 
+  const startNative = async (generation: number) => {
+    try {
+      let permission = await SpeechRecognition.checkPermissions()
+      if (generation !== nativeGeneration.current) return
+      if (permission.speechRecognition !== 'granted') {
+        permission = await SpeechRecognition.requestPermissions()
+        if (generation !== nativeGeneration.current) return
+      }
+      if (permission.speechRecognition !== 'granted') {
+        failToTextFallback('Izin mikrofon aplikasi belum diberikan. Aktifkan izin Mikrofon untuk ABElektronik di Pengaturan Android, lalu coba lagi.')
+        return
+      }
+      const { available } = await SpeechRecognition.available()
+      if (generation !== nativeGeneration.current) return
+      if (!available) {
+        failToTextFallback('Layanan pengenal suara Android tidak tersedia. Aktifkan aplikasi pengenal suara di perangkat, lalu coba lagi.')
+        return
+      }
+      nativeSession.current = true
+      setState('listening')
+      const result = await SpeechRecognition.start({ language: 'id-ID', maxResults: 1, popup: true, partialResults: false, prompt: 'Ucapkan perintah inventory' })
+      if (generation !== nativeGeneration.current) return
+      nativeSession.current = false
+      const spoken = result.matches?.[0]?.trim()
+      if (spoken) { setTranscript(spoken); interpret(spoken) }
+      else failToTextFallback('Suara belum terdengar jelas. Coba lagi atau ketik perintah.')
+    } catch (cause) {
+      if (generation !== nativeGeneration.current) return
+      nativeSession.current = false
+      const detail = cause instanceof Error ? cause.message : String(cause)
+      const permission = await SpeechRecognition.checkPermissions().catch(() => null)
+      if (generation !== nativeGeneration.current) return
+      failToTextFallback(permission?.speechRecognition === 'denied'
+        ? 'Izin mikrofon aplikasi ditolak. Aktifkan izin Mikrofon untuk ABElektronik di Pengaturan Android.'
+        : `Pengenalan suara Android gagal: ${detail}. Coba lagi atau ketik perintah.`)
+    }
+  }
+
   const start = () => {
     cancelAudio(); setError(''); resetDraft(); setTranscript(''); latestTranscript.current = ''; failed.current = false
+    if (Capacitor.isNativePlatform()) {
+      setState('permission')
+      void startNative(nativeGeneration.current)
+      return
+    }
     const Constructor = (window as VoiceWindow).SpeechRecognition ?? (window as VoiceWindow).webkitSpeechRecognition
     if (!isSpeechSecureContext()) { failToTextFallback(insecureSpeechOriginMessage()); return }
     if (!Constructor) { failToTextFallback('SpeechRecognition tidak tersedia di browser ini. Ketik perintah di bawah atau gunakan dikte keyboard Bahasa Indonesia.'); return }
@@ -224,6 +277,11 @@ export function VoiceDialog({
     } catch { failToTextFallback('Microphone tidak dapat dimulai. Gunakan HTTPS/localhost dan izinkan microphone, atau ketik perintah.') }
   }
 
+  const finishAudio = () => {
+    if (Capacitor.isNativePlatform()) { cancelAudio(); setState('idle'); return }
+    recognition.current?.stop()
+  }
+
   useEffect(() => {
     alive.current = true
     start()
@@ -259,7 +317,7 @@ export function VoiceDialog({
       {error && <p role="alert" className="rounded-xl bg-rose-400/10 p-3 text-rose-100">{error}</p>}
       {state === 'error' && !hasTranscript && products.length > 0 && <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Kolom perintah masih kosong. Ketik perintah sendiri atau pakai contoh dari produk toko aktif.</p>}
       {state !== 'success' && <div className="flex flex-wrap gap-2">
-        {state === 'listening' || state === 'permission' ? <Button onClick={() => recognition.current?.stop()}><Square />Selesai bicara</Button> : <Button variant="outline" disabled={locked} onClick={start}><Mic />{state === 'idle' ? 'Mulai Dengarkan' : 'Coba Lagi'}</Button>}
+        {state === 'listening' || state === 'permission' ? <Button onClick={finishAudio}><Square />Selesai bicara</Button> : <Button variant="outline" disabled={locked} onClick={start}><Mic />{state === 'idle' ? 'Mulai Dengarkan' : 'Coba Lagi'}</Button>}
         {state === 'error' && !hasTranscript && products.length > 0 && <Button variant="outline" disabled={locked} onClick={() => { setTranscript(exampleTranscript); setError(''); setState('idle'); focusTextFallback() }}>Pakai Contoh</Button>}
         <Button variant="outline" disabled={locked || !hasTranscript || state === 'listening' || state === 'permission'} onClick={() => interpret(transcript)}>Pahami perintah</Button>
       </div>}
