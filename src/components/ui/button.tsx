@@ -1,5 +1,18 @@
 import * as React from "react"
-import { ArrowLeft, ArrowRight, CheckCircle2, CircleDot, LayoutDashboard, Save, Sparkles, WandSparkles, X } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  CircleDot,
+  Eye,
+  History,
+  LayoutDashboard,
+  Save,
+  Sparkles,
+  Store,
+  WandSparkles,
+  X,
+} from "lucide-react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
 
@@ -42,28 +55,51 @@ const buttonVariants = cva(
   }
 )
 
-function buttonText(children: React.ReactNode) {
+function buttonText(children: React.ReactNode): string {
   return React.Children.toArray(children)
-    .filter((child): child is string | number => typeof child === "string" || typeof child === "number")
+    .map((child) => {
+      if (typeof child === "string" || typeof child === "number") return String(child)
+      if (React.isValidElement<{ children?: React.ReactNode }>(child)) return buttonText(child.props.children)
+      return ""
+    })
     .join(" ")
     .trim()
 }
 
-function hasVisualChild(children: React.ReactNode) {
-  return React.Children.toArray(children).some((child) => React.isValidElement(child))
+function hasVisualChild(children: React.ReactNode): boolean {
+  return React.Children.toArray(children).some((child) => {
+    if (!React.isValidElement<{ children?: React.ReactNode }>(child)) return false
+    if (child.type === React.Fragment) return hasVisualChild(child.props.children)
+    if (child.props.children == null) return true
+    return hasVisualChild(child.props.children)
+  })
 }
 
 function AutomaticButtonIcon({ text }: { text: string }) {
-  const props = { className: "size-4", "aria-hidden": true as const }
+  const props = { className: "size-4", "aria-hidden": true as const, "data-icon": "inline-start" }
   if (/batal|batalkan|tutup|close/i.test(text)) return <X {...props} />
   if (/kembali|prev|sebelumnya/i.test(text)) return <ArrowLeft {...props} />
   if (/next|berikutnya|lanjut/i.test(text)) return <ArrowRight {...props} />
   if (/simpan|save/i.test(text)) return <Save {...props} />
   if (/oke|selesai|konfirmasi|proses|update/i.test(text)) return <CheckCircle2 {...props} />
   if (/dashboard/i.test(text)) return <LayoutDashboard {...props} />
+  if (/history/i.test(text)) return <History {...props} />
+  if (/profil|toko/i.test(text)) return <Store {...props} />
+  if (/lihat/i.test(text)) return <Eye {...props} />
   if (/pahami/i.test(text)) return <Sparkles {...props} />
   if (/contoh/i.test(text)) return <WandSparkles {...props} />
   return <CircleDot {...props} />
+}
+
+function decorateButtonContent(children: React.ReactNode, size: VariantProps<typeof buttonVariants>["size"]) {
+  const text = buttonText(children)
+  if (String(size).startsWith("icon") || !text || hasVisualChild(children)) return children
+  return (
+    <>
+      <AutomaticButtonIcon text={text} />
+      {children}
+    </>
+  )
 }
 
 function Button({
@@ -78,11 +114,15 @@ function Button({
     asChild?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
-  const text = buttonText(children)
-  const showAutomaticIcon = !asChild
-    && !String(size).startsWith("icon")
-    && Boolean(text)
-    && !hasVisualChild(children)
+  let content = decorateButtonContent(children, size)
+
+  if (asChild && React.isValidElement<{ children?: React.ReactNode }>(children)) {
+    content = React.cloneElement(
+      children,
+      undefined,
+      decorateButtonContent(children.props.children, size),
+    )
+  }
 
   return (
     <Comp
@@ -92,8 +132,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     >
-      {showAutomaticIcon ? <AutomaticButtonIcon text={text} /> : null}
-      {children}
+      {content}
     </Comp>
   )
 }
