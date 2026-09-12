@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition'
-import { CheckCircle2, Mic, PackagePlus, ScanLine, Square, TriangleAlert } from 'lucide-react'
+import { Brain, CheckCircle2, Lightbulb, Mic, PackagePlus, Save, ScanLine, Square, TriangleAlert, X } from 'lucide-react'
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -318,8 +318,8 @@ export function VoiceDialog({
       {state === 'error' && !hasTranscript && products.length > 0 && <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Kolom perintah masih kosong. Ketik perintah sendiri atau pakai contoh dari produk toko aktif.</p>}
       {state !== 'success' && <div className="flex flex-wrap gap-2">
         {state === 'listening' || state === 'permission' ? <Button onClick={finishAudio}><Square />Selesai bicara</Button> : <Button variant="outline" disabled={locked} onClick={start}><Mic />{state === 'idle' ? 'Mulai Dengarkan' : 'Coba Lagi'}</Button>}
-        {state === 'error' && !hasTranscript && products.length > 0 && <Button variant="outline" disabled={locked} onClick={() => { setTranscript(exampleTranscript); setError(''); setState('idle'); focusTextFallback() }}>Pakai Contoh</Button>}
-        <Button variant="outline" disabled={locked || !hasTranscript || state === 'listening' || state === 'permission'} onClick={() => interpret(transcript)}>Pahami perintah</Button>
+        {state === 'error' && !hasTranscript && products.length > 0 && <Button variant="outline" disabled={locked} onClick={() => { setTranscript(exampleTranscript); setError(''); setState('idle'); focusTextFallback() }}><Lightbulb className="size-4" />Pakai Contoh</Button>}
+        <Button variant="outline" disabled={locked || !hasTranscript || state === 'listening' || state === 'permission'} onClick={() => interpret(transcript)}><Brain className="size-4" />Pahami perintah</Button>
       </div>}
 
       {transactionCommand && state !== 'success' && <section className="space-y-3" aria-label="Konfirmasi transaksi suara">
@@ -374,7 +374,7 @@ export function VoiceDialog({
             if (alive.current) { setSuccessMessage('Stok dan history berhasil diperbarui.'); setState('success') }
           } catch (e) { if (alive.current) { setState('review'); setError(e instanceof Error ? e.message : 'Transaksi gagal. Silakan coba lagi.') } }
           finally { busy.current = false }
-        }}>{state === 'saving' ? 'Menyimpan...' : 'Konfirmasi'}</Button>
+        }}><CheckCircle2 className="size-4" />{state === 'saving' ? 'Menyimpan...' : 'Konfirmasi'}</Button>
       </section>}
 
       {createDraft && state !== 'success' && <section className="space-y-3" aria-label="Draft barang baru">
@@ -441,11 +441,11 @@ export function VoiceDialog({
             if (alive.current) { setSuccessMessage('Barang baru berhasil ditambahkan.'); setState('success') }
           } catch (e) { if (alive.current) { setState('review'); setError(e instanceof Error ? e.message : 'Barang baru gagal disimpan.') } }
           finally { busy.current = false }
-        }}>{state === 'saving' ? 'Menyimpan...' : 'Simpan Barang Baru'}</Button>
+        }}><Save className="size-4" />{state === 'saving' ? 'Menyimpan...' : 'Simpan Barang Baru'}</Button>
       </section>}
 
       {state === 'success' && <p className="flex gap-2 text-emerald-200"><CheckCircle2 />{successMessage}</p>}
-      <Button variant="outline" disabled={state === 'saving'} onClick={onClose}>{state === 'success' ? 'Selesai' : 'Batalkan'}</Button>
+      <Button variant="outline" disabled={state === 'saving'} onClick={onClose}>{state === 'success' ? <CheckCircle2 className="size-4" /> : <X className="size-4" />}{state === 'success' ? 'Selesai' : 'Batalkan'}</Button>
     </DialogContent>
   </Dialog>
 }

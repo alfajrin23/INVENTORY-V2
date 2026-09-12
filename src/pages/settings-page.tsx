@@ -1,10 +1,9 @@
-import { History as HistoryIcon, Info, LogOut, RefreshCcw, Search, ShieldCheck, UserRound, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { History, Info, LogOut, ScrollText, ShieldCheck, Store, X } from 'lucide-react'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -13,63 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { demoEnabled, supabase } from '@/lib/supabase'
-import { Link } from 'react-router-dom'
-import { routes } from '@/lib/navigation'
 import { useToast } from '@/hooks/use-toast'
-import { useInventory } from '@/hooks/use-inventory'
-import { dateTimeLabel, formatCurrency } from '@/lib/format'
-import { getInventoryRepository } from '@/lib/inventory-service'
-import type { AuditLog } from '@/lib/types'
-
-type LogFilter = 'all' | AuditLog['entity']
-
-function auditName(log: AuditLog) {
-  const data = log.afterData ?? log.beforeData ?? {}
-  return String(data.namaBarang ?? data.nama_barang ?? data.name ?? log.recordId)
-}
-
-function auditValues(log: AuditLog, data: Record<string, unknown> | null) {
-  if (!data) return ''
-  if (log.entity === 'transaction') {
-    return `${data.kategori === 'keluar' ? 'Keluar' : 'Masuk'} ${data.jumlah ?? 0} unit | ${formatCurrency(Number(data.harga ?? 0))}`
-  }
-  if (log.entity === 'product') return `Stok ${data.stok ?? 0} | ${formatCurrency(Number(data.harga ?? 0))}`
-  return String(data.name ?? '')
-}
+import { routes } from '@/lib/navigation'
+import { demoEnabled, supabase } from '@/lib/supabase'
 
 export function SettingsPage() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const { showToast } = useToast()
-  const { activeStore, mode } = useInventory()
-  const [logs, setLogs] = useState<AuditLog[]>([])
-  const [logLoading, setLogLoading] = useState(true)
-  const [logError, setLogError] = useState('')
-  const [logFilter, setLogFilter] = useState<LogFilter>('all')
-  const [logSearch, setLogSearch] = useState('')
-  const logRequest = useRef(0)
-  const storeId = activeStore?.id
-  const loadLogs = useCallback(async () => {
-    const requestId = ++logRequest.current
-    if (!storeId) { setLogs([]); setLogError(''); setLogLoading(false); return }
-    setLogLoading(true); setLogError('')
-    try {
-      const result = await getInventoryRepository().getAuditLogs(storeId)
-      if (requestId === logRequest.current) setLogs(result)
-    } catch (error) {
-      if (requestId === logRequest.current) setLogError(error instanceof Error ? error.message : 'Logs gagal dimuat')
-    } finally {
-      if (requestId === logRequest.current) setLogLoading(false)
-    }
-  }, [storeId])
-  useEffect(() => {
-    void loadLogs()
-    return () => { ++logRequest.current }
-  }, [loadLogs])
-  const visibleLogs = useMemo(() => logs.filter(log =>
-    (logFilter === 'all' || log.entity === logFilter)
-    && (!logSearch.trim() || `${auditName(log)} ${log.action} ${log.entity}`.toLocaleLowerCase('id-ID').includes(logSearch.trim().toLocaleLowerCase('id-ID')))
-  ), [logs, logFilter, logSearch])
 
   const handleExit = async () => {
     if (supabase && !demoEnabled) {
@@ -95,10 +44,27 @@ export function SettingsPage() {
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Pengaturan</h1>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button asChild variant="outline"><Link to={routes.profile}><UserRound className="size-4" />Profil & Toko</Link></Button>
-        <Button asChild variant="outline"><Link to={routes.history}><HistoryIcon className="size-4" />History Barang</Link></Button>
+      <div className="grid max-w-2xl gap-2 sm:grid-cols-3">
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.profile}>
+            <Store className="size-4" />
+            Profil & Toko
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.history}>
+            <History className="size-4" />
+            History Barang
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.logsInput}>
+            <ScrollText className="size-4" />
+            Logs Input
+          </Link>
+        </Button>
       </div>
+
       <GlassPanel className="max-w-2xl divide-y divide-white/10 p-2" glow="cyan">
         <button
           type="button"
@@ -131,29 +97,6 @@ export function SettingsPage() {
           </span>
         </button>
       </GlassPanel>
-
-      <section aria-labelledby="audit-heading" className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div><h2 id="audit-heading" className="text-xl font-semibold text-white">Logs Input</h2><p className="text-sm text-white/55">{activeStore?.name ?? 'Pilih toko'} | {logs.length} aktivitas terbaru</p></div>
-          <Button type="button" variant="outline" size="icon" aria-label="Muat ulang logs" title="Muat ulang logs" onClick={() => void loadLogs()} disabled={logLoading}><RefreshCcw className="size-4" /></Button>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-[1fr_12rem]">
-          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/42" /><Input value={logSearch} onChange={event => setLogSearch(event.target.value)} placeholder="Cari aktivitas" aria-label="Cari logs input" className="h-11 border-white/12 bg-white/[0.07] pl-10 text-white" /></div>
-          <Select value={logFilter} onValueChange={value => setLogFilter(value as LogFilter)}><SelectTrigger aria-label="Filter logs input" className="h-11 border-white/12 bg-white/[0.07] text-white"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Semua aktivitas</SelectItem><SelectItem value="transaction">Transaksi</SelectItem><SelectItem value="product">Barang</SelectItem><SelectItem value="store">Toko</SelectItem></SelectContent></Select>
-        </div>
-        {logError ? <p role="alert" className="text-sm text-rose-200">{logError}</p> : logLoading ? <p className="text-sm text-white/55">Memuat logs...</p> : visibleLogs.length ? (
-          <div className="divide-y divide-white/10 border-y border-white/10">
-            {visibleLogs.map(log => <div key={log.id} className="grid gap-2 py-3 sm:grid-cols-[10rem_1fr_auto] sm:items-start sm:gap-4">
-              <time className="text-xs text-white/50" dateTime={log.createdAt}>{dateTimeLabel(log.createdAt)}</time>
-              <div className="min-w-0">
-                <p className="break-words text-sm font-semibold text-white">{log.action === 'insert' ? 'Input' : log.action === 'update' ? 'Edit' : 'Hapus'} {log.entity === 'transaction' ? 'transaksi' : log.entity === 'product' ? 'barang' : 'toko'}: {auditName(log)}</p>
-                <p className="mt-1 break-words text-xs text-white/55">{log.beforeData && `${auditValues(log, log.beforeData)} ke `}{log.afterData ? auditValues(log, log.afterData) : 'Dihapus'}</p>
-              </div>
-              <span className="text-xs text-white/42" title={log.actorId ?? undefined}>{mode === 'demo' ? 'Demo' : log.actorId ? 'Pemilik toko' : 'Sistem'}</span>
-            </div>)}
-          </div>
-        ) : <p className="border-y border-white/10 py-6 text-sm text-white/55">Belum ada aktivitas untuk filter ini.</p>}
-      </section>
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-lg">

@@ -10,6 +10,8 @@ import {
   Power,
   ScanLine,
   Search,
+  Settings,
+  Store,
   Sun,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -32,7 +34,7 @@ import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { buildWhatsAppSummary, matchProduct } from '@/lib/format'
 import { mobileNavigation, navigationItems, routes } from '@/lib/navigation'
-import { clearInventoryNotification, inventoryNotificationContent, INVENTORY_NOTIFICATION_ID, prepareInventoryNotification, showInventoryNotification } from '@/lib/android-notifications'
+import { inventoryNotificationContent, INVENTORY_NOTIFICATION_ID, prepareInventoryNotification, showInventoryNotification } from '@/lib/android-notifications'
 import { cn } from '@/lib/utils'
 
 function isActive(currentPath: string, targetPath: string) {
@@ -126,7 +128,6 @@ export function AppShell() {
     return () => {
       closed = true
       if (removeListener) void removeListener()
-      void clearInventoryNotification().catch(() => undefined)
     }
   }, [navigate, reportNotificationError])
 
@@ -361,13 +362,14 @@ export function AppShell() {
                 variant="outline"
                 className="hidden h-11 border-white/12 bg-white/[0.07] text-white hover:bg-white/12 lg:inline-flex"
               >
+                <Store className="size-4" />
                 Profil
                 <ChevronDown className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem aria-label="Profil toko" onClick={() => navigate(routes.profile)}>Profil toko</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate(routes.settings)}>Pengaturan</DropdownMenuItem>
+              <DropdownMenuItem aria-label="Profil toko" onClick={() => navigate(routes.profile)}><Store className="size-4" />Profil toko</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate(routes.settings)}><Settings className="size-4" />Pengaturan</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

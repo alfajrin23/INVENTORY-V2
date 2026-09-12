@@ -1,4 +1,4 @@
-import { ArrowDownCircle, ArrowUpCircle, CalendarDays, ChevronLeft, ChevronRight, Filter, Plus, ScanLine, Search } from 'lucide-react'
+import { ArrowDownCircle, ArrowUpCircle, CalendarDays, ChevronLeft, ChevronRight, Filter, Plus, Save, ScanLine, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
@@ -402,9 +402,11 @@ export function HistoryPage() {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+              <X className="size-4" />
               Batal
             </Button>
             <Button type="button" onClick={() => void handleSubmit()} disabled={saving} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+              <Save className="size-4" />
               {saving ? 'Menyimpan' : 'Simpan'}
             </Button>
           </DialogFooter>

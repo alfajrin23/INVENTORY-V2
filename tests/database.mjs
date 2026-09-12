@@ -17,7 +17,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth;
   grant usage on schema auth,public to authenticated,anon;
   grant execute on function auth.uid() to authenticated,anon;
   insert into auth.users values('${owner}'),('${other}');`)
-for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql', '003_transaction_revision_audit.sql']) {
+for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql', '003_transaction_revision_audit.sql', '004_performance_tuning.sql']) {
   await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'))
 }
 await db.exec(`set request.jwt.claim.sub='${owner}'; set role authenticated;

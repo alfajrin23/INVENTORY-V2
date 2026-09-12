@@ -2,7 +2,6 @@ import {
   endOfDay,
   endOfMonth,
   formatCurrency,
-  getTodaySales,
   indonesiaDays,
   isWithinDateRange,
   startOfDay,
@@ -16,23 +15,34 @@ export function getDashboardMetrics(products: Product[], history: HistoryItem[])
   const today = new Date()
   const yesterday = new Date(today)
   yesterday.setDate(today.getDate() - 1)
+  const todayStart = startOfDay(today)
+  const todayEnd = endOfDay(today)
+  const yesterdayStart = startOfDay(yesterday)
+  const yesterdayEnd = endOfDay(yesterday)
+  let todayRevenue = 0
+  let yesterdayRevenue = 0
+  let todayTransactions = 0
+  let lowStockCount = 0
 
-  const todaySales = getTodaySales(history)
-  const yesterdaySales = history.filter(
-    (item) =>
-      item.kategori === 'keluar' &&
-      isWithinDateRange(item.tanggal, startOfDay(yesterday), endOfDay(yesterday)),
-  )
+  for (const product of products) {
+    if (product.stok <= 5) lowStockCount++
+  }
 
-  const todayRevenue = todaySales.reduce((sum, item) => sum + item.harga * item.jumlah, 0)
-  const yesterdayRevenue = yesterdaySales.reduce((sum, item) => sum + item.harga * item.jumlah, 0)
-  const lowStockCount = products.filter((product) => product.stok <= 5).length
+  for (const item of history) {
+    if (item.kategori !== 'keluar') continue
+    if (isWithinDateRange(item.tanggal, todayStart, todayEnd)) {
+      todayTransactions++
+      todayRevenue += item.harga * item.jumlah
+    } else if (isWithinDateRange(item.tanggal, yesterdayStart, yesterdayEnd)) {
+      yesterdayRevenue += item.harga * item.jumlah
+    }
+  }
 
   return {
     todayRevenue,
     todayRevenueLabel: formatCurrency(todayRevenue),
     totalProducts: products.length,
-    todayTransactions: todaySales.length,
+    todayTransactions,
     lowStockCount,
     revenueTrend: trendFromValues(todayRevenue, yesterdayRevenue),
   }
@@ -61,20 +71,19 @@ export function getTopProductsThisMonth(history: HistoryItem[]) {
   const end = endOfMonth(now.getFullYear(), now.getMonth())
   const sold = new Map<string, { namaBarang: string; brand: string; jumlah: number; pendapatan: number }>()
 
-  history
-    .filter((item) => item.kategori === 'keluar' && isWithinDateRange(item.tanggal, start, end))
-    .forEach((item) => {
-      const key = `${item.brand}-${item.namaBarang}`
-      const current = sold.get(key) ?? {
-        namaBarang: item.namaBarang,
-        brand: item.brand,
-        jumlah: 0,
-        pendapatan: 0,
-      }
-      current.jumlah += item.jumlah
-      current.pendapatan += item.harga * item.jumlah
-      sold.set(key, current)
-    })
+  for (const item of history) {
+    if (item.kategori !== 'keluar' || !isWithinDateRange(item.tanggal, start, end)) continue
+    const key = `${item.brand}-${item.namaBarang}`
+    const current = sold.get(key) ?? {
+      namaBarang: item.namaBarang,
+      brand: item.brand,
+      jumlah: 0,
+      pendapatan: 0,
+    }
+    current.jumlah += item.jumlah
+    current.pendapatan += item.harga * item.jumlah
+    sold.set(key, current)
+  }
 
   return Array.from(sold.values())
     .sort((a, b) => b.jumlah - a.jumlah)

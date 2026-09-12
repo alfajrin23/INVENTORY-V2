@@ -33,6 +33,7 @@ export const routes = {
   revenueWeek: '/pendapatanmingguan.html',
   revenueMonth: '/pendapatanbulanan.html',
   settings: '/pengaturan.html',
+  logsInput: '/logsinput.html',
   profile: '/profilsetting.html',
 }
 

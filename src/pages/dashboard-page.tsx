@@ -1,4 +1,5 @@
 import {
+  ArrowRight,
   AlertTriangle,
   ClipboardList,
   History,
@@ -33,6 +34,9 @@ import { useInventory } from '@/hooks/use-inventory'
 import { getDailyRevenueSeries, getDashboardMetrics, getTopProductsThisMonth } from '@/lib/analytics'
 import { dateTimeLabel, formatCurrency, formatNumber } from '@/lib/format'
 import { routes } from '@/lib/navigation'
+
+const chartTextColor = '#315f63'
+const chartGridColor = 'rgba(49,95,99,0.14)'
 
 export function DashboardPage() {
   const { products, history, loading, productsReady, error, refresh } = useInventory()
@@ -97,10 +101,10 @@ export function DashboardPage() {
           <div className="h-[290px]">
             {loading ? <Skeleton className="h-full w-full rounded-lg bg-white/10" /> : <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={dailyRevenue} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
-                <XAxis dataKey="hari" stroke="rgba(255,255,255,0.55)" tickLine={false} axisLine={false} />
+                <CartesianGrid stroke={chartGridColor} vertical={false} />
+                <XAxis dataKey="hari" stroke={chartTextColor} tickLine={false} axisLine={false} />
                 <YAxis yAxisId="revenue"
-                  stroke="rgba(255,255,255,0.55)"
+                  stroke={chartTextColor}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => `${Number(value) / 1000}k`}
@@ -116,10 +120,10 @@ export function DashboardPage() {
                     name === 'pendapatan' ? [formatCurrency(Number(value)), 'Pendapatan'] : [value, 'Transaksi']
                   }
                 />
-                <YAxis yAxisId="transactions" orientation="right" width={28} allowDecimals={false} tickLine={false} axisLine={false} stroke="rgba(255,255,255,0.55)" />
+                <YAxis yAxisId="transactions" orientation="right" width={28} allowDecimals={false} tickLine={false} axisLine={false} stroke={chartTextColor} />
                 <Legend />
-                <Bar yAxisId="revenue" dataKey="pendapatan" fill="#00d2ff" radius={[8, 8, 0, 0]} />
-                <Line yAxisId="transactions" type="monotone" dataKey="transaksi" stroke="#ffb454" strokeWidth={3} dot={{ r: 4 }} />
+                <Bar yAxisId="revenue" dataKey="pendapatan" fill="#00d2ff" radius={[8, 8, 0, 0]} isAnimationActive={false} />
+                <Line yAxisId="transactions" type="monotone" dataKey="transaksi" stroke="#ffb454" strokeWidth={3} dot={{ r: 4 }} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>}
           </div>
@@ -137,13 +141,13 @@ export function DashboardPage() {
             {loading ? <Skeleton className="h-full w-full rounded-lg bg-white/10" /> : topProducts.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={topProducts} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.08)" horizontal={false} />
-                  <XAxis type="number" stroke="rgba(255,255,255,0.55)" tickLine={false} axisLine={false} />
+                  <CartesianGrid stroke={chartGridColor} horizontal={false} />
+                  <XAxis type="number" stroke={chartTextColor} tickLine={false} axisLine={false} />
                   <YAxis
                     type="category"
                     dataKey="namaBarang"
                     width={126}
-                    stroke="rgba(255,255,255,0.55)"
+                    stroke={chartTextColor}
                     tickLine={false}
                     axisLine={false}
                   />
@@ -156,7 +160,7 @@ export function DashboardPage() {
                     }}
                     formatter={(value) => [formatNumber(Number(value)), 'Terjual']}
                   />
-                  <Bar dataKey="jumlah" fill="#7b2ff7" radius={[0, 8, 8, 0]} />
+                  <Bar dataKey="jumlah" fill="#7b2ff7" radius={[0, 8, 8, 0]} isAnimationActive={false} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -201,7 +205,10 @@ export function DashboardPage() {
               <p className="text-sm text-white/52">Masuk dan keluar dari toko aktif</p>
             </div>
             <Button asChild variant="outline" className="border-white/12 bg-white/[0.06] text-white hover:bg-white/12">
-              <Link to={routes.history}>Lihat semua</Link>
+              <Link to={routes.history}>
+                <ArrowRight className="size-4" />
+                Lihat semua
+              </Link>
             </Button>
           </div>
 

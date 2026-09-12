@@ -77,10 +77,10 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     let request = snapshotRequest.current
     if (!request) {
       const epoch = ++requestEpoch.current
-      request = repository.getSnapshot((partial) => {
-        if (epoch !== requestEpoch.current || productsReadyRef.current) return
-        productsReadyRef.current = true
-        setProductsReady(true)
+      request = repository.getSnapshot(background ? undefined : (partial) => {
+        if (epoch !== requestEpoch.current) return
+        productsReadyRef.current = Boolean(partial.activeStore)
+        setProductsReady(Boolean(partial.activeStore))
         setSnapshot(partial)
       })
       snapshotRequest.current = request

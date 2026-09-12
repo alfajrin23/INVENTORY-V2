@@ -8,9 +8,11 @@ import {
   Eye,
   FileText,
   Plus,
+  Save,
   ScanLine,
   Search,
   Trash2,
+  X,
 } from 'lucide-react'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 
@@ -674,9 +676,11 @@ export function ProductsPage() {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+              <X className="size-4" />
               Batal
             </Button>
             <Button type="button" disabled={saving} onClick={() => void handleSave()} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200">
+              <Save className="size-4" />
               Simpan
             </Button>
           </DialogFooter>
@@ -740,6 +744,7 @@ export function ProductsPage() {
               Lihat
             </Button>
             <Button type="button" onClick={() => setBarcodeOpen(false)}>
+              <X className="size-4" />
               Tutup
             </Button>
           </DialogFooter>
@@ -761,6 +766,7 @@ export function ProductsPage() {
                   disabled={fullscreenIndex === 0}
                   onClick={() => setFullscreenIndex((current) => Math.max(current - 1, 0))}
                 >
+                  <ChevronLeft className="size-4" />
                   Prev
                 </Button>
                 <Button
@@ -769,10 +775,12 @@ export function ProductsPage() {
                   disabled={fullscreenIndex === selectedProducts.length - 1}
                   onClick={() => setFullscreenIndex((current) => Math.min(current + 1, selectedProducts.length - 1))}
                 >
+                  <ChevronRight className="size-4" />
                   Next
                 </Button>
                 <Button type="button" onClick={() => setFullscreenOpen(false)}>
-                  Close
+                  <X className="size-4" />
+                  Tutup
                 </Button>
               </div>
             </div>

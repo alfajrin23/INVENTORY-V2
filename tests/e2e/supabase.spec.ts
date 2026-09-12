@@ -24,7 +24,7 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     create function auth.uid() returns uuid language sql as $$select '${uid}'::uuid$$;
     grant usage on schema public,auth to authenticated;
     insert into auth.users values('${uid}');`)
-  for(const file of ['001_inventory_schema.sql','002_inventory_transaction_rpc.sql','003_transaction_revision_audit.sql']) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'))
+  for(const file of ['001_inventory_schema.sql','002_inventory_transaction_rpc.sql','003_transaction_revision_audit.sql','004_performance_tuning.sql']) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'))
   await db.exec(`set role authenticated;
     insert into stores(id,name) values('${store}','Toko SQL');
     insert into products(id,store_id,nama_barang,brand,harga,stok,barcode) values('${product}','${store}','Lampu Philips','Philips',15000,15,'12345');`)
@@ -90,9 +90,10 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     expect((await db.query<{stok:number}>('select stok from products')).rows[0].stok).toBe(13)
     expect((await db.query('select * from history')).rows).toHaveLength(1)
     await page.goto('/pengaturan.html')
+    await page.getByRole('link',{name:'Logs Input'}).click()
     await expect(page.getByRole('heading',{name:'Logs Input'})).toBeVisible()
-    await expect(page.getByText('Hapus transaksi: Lampu Philips')).toBeVisible()
-    await expect(page.getByText('Edit transaksi: Lampu Philips')).toBeVisible()
+    await expect(page.getByRole('row').filter({hasText:'Hapus transaksi: Lampu Philips'})).toBeVisible()
+    await expect(page.getByRole('row').filter({hasText:'Edit transaksi: Lampu Philips'})).toBeVisible()
     // Remote stock changed after confirmation was prepared: server validation wins.
     await page.getByRole('button',{name:'Buka Voice AI'}).click();await page.getByLabel('Perintah Anda').fill('jual lampu Philips sepuluh');await page.getByRole('button',{name:'Pahami perintah'}).click()
     await db.exec('reset role; update products set stok=1; set role authenticated;')

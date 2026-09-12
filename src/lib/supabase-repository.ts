@@ -24,22 +24,31 @@ function result(data: { products: Record<string, unknown>[]; history: Record<str
   return { products: data.products.map(fromRow<Product>), history: data.history.map(fromRow<HistoryItem>) }
 }
 
+type ReadRowsOptions = {
+  storeId?: string
+  pageSize?: number
+  onFirstPage?: (rows: Record<string, unknown>[]) => void
+}
+
 // Supabase defaults to a row limit. Page explicitly so reports never silently omit rows.
-// PAGE_SIZE=1000 cuts request count in half compared with the previous 500-row pagination.
-async function readRows(table: 'stores' | 'products' | 'history', storeId?: string) {
+// PAGE_SIZE=1000 cuts request count while onFirstPage keeps the UI responsive.
+async function readRows(table: 'stores' | 'products' | 'history', options: ReadRowsOptions = {}) {
   const rows: Record<string, unknown>[] = []
-  for (let offset = 0; ; offset += PAGE_SIZE) {
+  const pageSize = options.pageSize ?? PAGE_SIZE
+  for (let offset = 0; ; offset += pageSize) {
     let query = requireSupabase().from(table).select(selectColumns[table])
-    if (storeId) query = query.eq('store_id', storeId)
+    if (options.storeId) query = query.eq('store_id', options.storeId)
     if (table === 'history') {
       query = query.order('tanggal', { ascending: false }).order('id')
     } else {
       query = query.order('id')
     }
-    const { data, error } = await query.range(offset, offset + PAGE_SIZE - 1)
+    const { data, error } = await query.range(offset, offset + pageSize - 1)
     if (error) throw databaseError(error)
-    rows.push(...data)
-    if (data.length < PAGE_SIZE) return rows
+    const pageRows = (data ?? []) as unknown as Record<string, unknown>[]
+    rows.push(...pageRows)
+    if (offset === 0) options.onFirstPage?.([...rows])
+    if (pageRows.length < pageSize) return rows
   }
 }
 async function stores() { return (await readRows('stores')).map(fromRow<StoreRecord>) }
@@ -47,26 +56,27 @@ async function stores() { return (await readRows('stores')).map(fromRow<StoreRec
 export const supabaseRepository: InventoryRepository = {
   mode: 'supabase',
   fetchStores: stores,
-  async getSnapshot(onProducts) {
+  async getSnapshot(onPartial) {
     const storedId = localStorage.getItem('activeStoreId')
     const storesRequest = stores()
-    const productRequest = storedId ? readRows('products', storedId) : null
-    const historyRequest = storedId ? readRows('history', storedId) : null
+    const productRequest = storedId ? readRows('products', { storeId: storedId }) : null
     // A store can be removed while its cached ID remains in this browser.
     void productRequest?.catch(() => undefined)
-    void historyRequest?.catch(() => undefined)
     const allStores = await storesRequest
     const activeStore = allStores.find(s => s.id === storedId) ?? allStores[0] ?? null
     if (!activeStore) {
       const empty = { stores: allStores, activeStore: null, products: [], history: [] }
-      onProducts?.(empty)
+      onPartial?.(empty)
       return empty
     }
     localStorage.setItem('activeStoreId', activeStore.id)
-    const productRows = await (storedId === activeStore.id ? productRequest! : readRows('products', activeStore.id))
+    const productRows = await (storedId === activeStore.id ? productRequest! : readRows('products', { storeId: activeStore.id }))
     const products = productRows.map(fromRow<Product>)
-    onProducts?.({ stores: allStores, activeStore, products, history: [] })
-    const historyRows = await (storedId === activeStore.id ? historyRequest! : readRows('history', activeStore.id))
+    onPartial?.({ stores: allStores, activeStore, products, history: [] })
+    const historyRows = await readRows('history', {
+      storeId: activeStore.id,
+      onFirstPage: rows => onPartial?.({ stores: allStores, activeStore, products, history: rows.map(fromRow<HistoryItem>) }),
+    })
     return { stores: allStores, activeStore, products, history: historyRows.map(fromRow<HistoryItem>) }
   },
   async setActiveStore(id) { localStorage.setItem('activeStoreId', id) },

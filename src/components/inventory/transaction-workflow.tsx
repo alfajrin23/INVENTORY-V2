@@ -1,7 +1,9 @@
 import {
+  ArrowLeft,
   CheckCircle2,
   CreditCard,
   FileText,
+  LayoutDashboard,
   Minus,
   Plus,
   Printer,
@@ -272,6 +274,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
             </div>
             <DialogFooter className="mx-0 mb-0 border-0 bg-transparent p-0">
               <Button type="button" variant="outline" onClick={() => navigate(routes.dashboard)}>
+                <LayoutDashboard className="size-4" />
                 Ke Dashboard
               </Button>
               <Button type="button" variant="outline" onClick={() => onScannerOpenChange(true)}>
@@ -313,6 +316,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
               Print
             </Button>
             <Button type="button" onClick={() => setResultOpen(false)}>
+              <CheckCircle2 className="size-4" />
               Oke
             </Button>
           </DialogFooter>
@@ -340,6 +344,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
                 Print Resi
               </Button>
               <Button type="button" variant="outline" onClick={() => setReceiptOpen(false)}>
+                <ArrowLeft className="size-4" />
                 Kembali
               </Button>
             </div>

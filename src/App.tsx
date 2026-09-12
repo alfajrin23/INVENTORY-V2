@@ -13,6 +13,7 @@ const loadProductsPage = () => import('@/pages/products-page')
 const loadHistoryPage = () => import('@/pages/history-page')
 const loadReportsHubPage = () => import('@/pages/reports-hub-page')
 const loadSettingsPage = () => import('@/pages/settings-page')
+const loadLogsInputPage = () => import('@/pages/logs-input-page')
 const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
 const loadReportPages = () => import('@/pages/report-pages')
 
@@ -21,6 +22,7 @@ const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: 
 const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: module.HistoryPage })))
 const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })))
+const LogsInputPage = lazy(() => loadLogsInputPage().then((module) => ({ default: module.LogsInputPage })))
 const ProfileSettingsPage = lazy(() =>
   loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })),
 )
@@ -88,6 +90,7 @@ function App() {
                   <Route path={routes.revenueWeek} element={<RevenueWeeklyPage />} />
                   <Route path={routes.revenueMonth} element={<RevenueMonthlyPage />} />
                   <Route path={routes.settings} element={<SettingsPage />} />
+                  <Route path={routes.logsInput} element={<LogsInputPage />} />
                   <Route path={routes.profile} element={<ProfileSettingsPage />} />
                   <Route path="*" element={<Navigate to={routes.dashboard} replace />} />
                 </Route>
