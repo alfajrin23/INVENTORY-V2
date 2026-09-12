@@ -1,4 +1,4 @@
-import { Info, LogOut, RefreshCcw, Search, ShieldCheck } from 'lucide-react'
+import { History as HistoryIcon, Info, LogOut, RefreshCcw, Search, ShieldCheck, UserRound, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
@@ -95,7 +95,10 @@ export function SettingsPage() {
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Pengaturan</h1>
       </div>
 
-      <div className="flex flex-wrap gap-2"><Button asChild variant="outline"><Link to={routes.profile}>Profil & Toko</Link></Button><Button asChild variant="outline"><Link to={routes.history}>History Barang</Link></Button></div>
+      <div className="flex flex-wrap gap-2">
+        <Button asChild variant="outline"><Link to={routes.profile}><UserRound className="size-4" />Profil & Toko</Link></Button>
+        <Button asChild variant="outline"><Link to={routes.history}><HistoryIcon className="size-4" />History Barang</Link></Button>
+      </div>
       <GlassPanel className="max-w-2xl divide-y divide-white/10 p-2" glow="cyan">
         <button
           type="button"
@@ -169,6 +172,7 @@ export function SettingsPage() {
           </div>
           <DialogFooter>
             <Button type="button" onClick={() => setAboutOpen(false)}>
+              <X className="size-4" />
               Tutup
             </Button>
           </DialogFooter>
