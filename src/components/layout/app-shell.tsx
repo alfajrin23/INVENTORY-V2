@@ -12,7 +12,7 @@ import {
   Search,
   Sun,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { TransactionWorkflow } from '@/components/inventory/transaction-workflow'
@@ -32,7 +32,7 @@ import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { buildWhatsAppSummary, matchProduct } from '@/lib/format'
 import { mobileNavigation, navigationItems, routes } from '@/lib/navigation'
-import { clearInventoryNotification, inventoryNotificationContent, registerInventoryNotification, showInventoryNotification } from '@/lib/android-notifications'
+import { clearInventoryNotification, inventoryNotificationContent, INVENTORY_NOTIFICATION_ID, prepareInventoryNotification, showInventoryNotification } from '@/lib/android-notifications'
 import { cn } from '@/lib/utils'
 
 function isActive(currentPath: string, targetPath: string) {
@@ -53,9 +53,19 @@ export function AppShell() {
   const [scanOpen, setScanOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [notificationReady, setNotificationReady] = useState(false)
+  const [notificationIssue, setNotificationIssue] = useState('')
   const lastNotificationSignature = useRef('')
+  const lastNotificationError = useRef('')
   const loadingRef = useRef(loading)
   const pendingNotificationVoice = useRef(false)
+  const reportNotificationError = useCallback((error: unknown) => {
+    const message = error instanceof Error ? error.message : 'Notifikasi Android gagal ditampilkan. Ketuk lonceng untuk mencoba lagi.'
+    setNotificationIssue(message)
+    if (lastNotificationError.current !== message) {
+      lastNotificationError.current = message
+      showToast(message, 'error')
+    }
+  }, [showToast])
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     if (typeof window === 'undefined') {
       return 'dark'
@@ -109,40 +119,61 @@ export function AppShell() {
       })
       removeListener = () => listener.remove()
       if (closed) { await listener.remove(); return }
-      await registerInventoryNotification()
-      let permission = await LocalNotifications.checkPermissions()
-      if (permission.display === 'prompt') permission = await LocalNotifications.requestPermissions()
-      if (!closed && permission.display === 'granted') setNotificationReady(true)
+      await prepareInventoryNotification()
+      if (!closed) setNotificationReady(true)
     }
-    void setup().catch(() => undefined)
+    void setup().catch(error => { if (!closed) reportNotificationError(error) })
     return () => {
       closed = true
       if (removeListener) void removeListener()
       void clearInventoryNotification().catch(() => undefined)
     }
-  }, [navigate])
+  }, [navigate, reportNotificationError])
 
+  const notificationStoreName = activeStore?.name ?? 'Inventory'
   const notificationContent = useMemo(
-    () => inventoryNotificationContent(activeStore?.name ?? 'ABElektronik', products),
-    [activeStore?.name, products],
+    () => inventoryNotificationContent(notificationStoreName, products),
+    [notificationStoreName, products],
   )
-  const notificationDetails = notificationContent.inboxList.join('|')
+  const notificationDetails = notificationContent.inboxList?.join('|') ?? ''
   const notificationSignature = `${activeStore?.id ?? ''}|${notificationContent.title}|${notificationContent.body}|${notificationDetails}`
   useEffect(() => {
-    if (!notificationReady || loading) return
-    if (!activeStore) {
-      lastNotificationSignature.current = ''
-      void clearInventoryNotification().catch(() => undefined)
-      return
-    }
+    if (!notificationReady) return
     if (lastNotificationSignature.current === notificationSignature) return
     const timer = window.setTimeout(() => {
-      void showInventoryNotification(activeStore.name, products)
-        .then(() => { lastNotificationSignature.current = notificationSignature })
-        .catch(() => undefined)
+      void showInventoryNotification(notificationStoreName, products)
+        .then(() => {
+          lastNotificationSignature.current = notificationSignature
+          lastNotificationError.current = ''
+          setNotificationIssue('')
+        })
+        .catch(reportNotificationError)
     }, 250)
     return () => window.clearTimeout(timer)
-  }, [activeStore, loading, notificationReady, notificationSignature, products])
+  }, [notificationReady, notificationSignature, notificationStoreName, products, reportNotificationError])
+
+  useEffect(() => {
+    if (!notificationReady) return
+    const restoreNotification = () => {
+      void LocalNotifications.getDeliveredNotifications()
+        .then(({ notifications }) => {
+          if (notifications.some(notification => notification.id === INVENTORY_NOTIFICATION_ID)) return
+          return showInventoryNotification(notificationStoreName, products).then(() => {
+            lastNotificationSignature.current = notificationSignature
+            lastNotificationError.current = ''
+            setNotificationIssue('')
+          })
+        })
+        .catch(reportNotificationError)
+    }
+    const onVisibilityChange = () => { if (!document.hidden) restoreNotification() }
+    window.addEventListener('focus', restoreNotification)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('focus', restoreNotification)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [notificationReady, notificationSignature, notificationStoreName, products, reportNotificationError])
 
   const enableNotifications = async () => {
     if (!Capacitor.isNativePlatform()) {
@@ -150,21 +181,14 @@ export function AppShell() {
       return
     }
     try {
-      const permission = await LocalNotifications.requestPermissions()
-      if (permission.display !== 'granted') {
-        showToast('Izin notifikasi belum aktif. Izinkan notifikasi ABElektronik di Pengaturan Android.', 'error')
-        return
-      }
-      await registerInventoryNotification()
+      await prepareInventoryNotification(true)
+      await showInventoryNotification(notificationStoreName, products)
+      lastNotificationSignature.current = notificationSignature
+      lastNotificationError.current = ''
+      setNotificationIssue('')
       setNotificationReady(true)
-      if (activeStore) {
-        await showInventoryNotification(activeStore.name, products)
-        lastNotificationSignature.current = notificationSignature
-      }
       showToast('Notifikasi inventory aktif di panel Android.', 'success')
-    } catch {
-      showToast('Notifikasi Android gagal diaktifkan.', 'error')
-    }
+    } catch (error) { reportNotificationError(error) }
   }
 
   const handleShutdown = () => {
@@ -320,12 +344,13 @@ export function AppShell() {
             type="button"
             variant="outline"
             size="icon-lg"
-            aria-label="Aktifkan notifikasi Android"
-            title="Aktifkan notifikasi Android"
+            aria-label={notificationIssue ? 'Periksa notifikasi Android' : 'Aktifkan notifikasi Android'}
+            title={notificationIssue || 'Aktifkan notifikasi Android'}
             onClick={() => void enableNotifications()}
-            className="border-white/12 bg-white/[0.07] text-white hover:bg-white/12"
+            className={cn('relative border-white/12 bg-white/[0.07] text-white hover:bg-white/12', notificationIssue && 'border-rose-400/60')}
           >
             <Bell className="size-4" />
+            {notificationIssue && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-rose-400" />}
           </Button>
 
           <Button aria-label="Buka scanner" variant="outline" size="icon-lg" onClick={() => setScanOpen(true)} className="lg:hidden"><ScanLine /></Button>

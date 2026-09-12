@@ -17,7 +17,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth;
   grant usage on schema auth,public to authenticated,anon;
   grant execute on function auth.uid() to authenticated,anon;
   insert into auth.users values('${owner}'),('${other}');`)
-for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql']) {
+for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql', '003_transaction_revision_audit.sql']) {
   await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'))
 }
 await db.exec(`set request.jwt.claim.sub='${owner}'; set role authenticated;
@@ -56,11 +56,32 @@ await db.exec(`reset role;
 await assert.rejects(call([{productId:p1,quantity:1}]), /Injected history failure/)
 assert.deepEqual(await stock(),[15,2]); assert.equal(await count(),3)
 await db.exec('reset role; drop trigger reject_test_history on public.history; drop function public.reject_test_history(); set role authenticated;')
+const originalSale = (await db.query("select id, updated_at from history where kategori='keluar' order by tanggal limit 1")).rows[0]
+const revisedSale = { productId: p1, category: 'keluar', quantity: 4, price: 15000, date: new Date().toISOString(), note: 'Harga dikoreksi', operator: 'Admin' }
+const revise = (row, change, remove = false) => db.query(
+  'select revise_inventory_transaction($1,$2,$3,$4::jsonb,$5) as result',
+  [store, row.id, row.updated_at, JSON.stringify(change), remove])
+await revise(originalSale, revisedSale)
+assert.deepEqual(await stock(), [13,2]); assert.equal(await count(),3)
+await assert.rejects(revise(originalSale, revisedSale), /sudah berubah/)
+const changedSale = (await db.query('select id, updated_at from history where id=$1',[originalSale.id])).rows[0]
+await revise(changedSale, revisedSale, true)
+assert.deepEqual(await stock(), [17,2]); assert.equal(await count(),2)
+await assert.rejects(revise(changedSale, revisedSale, true), /tidak ditemukan/)
+assert.ok((await db.query("select count(*)::int as n from audit_logs where entity='transaction' and action='delete'")).rows[0].n >= 1)
+await assert.rejects(db.exec(`insert into audit_logs(owner_id,store_id,entity,action,record_id) values('${owner}','${store}','product','insert','${p1}')`), /permission denied/)
+await call([{productId:p1,quantity:16}], 'keluar')
+assert.deepEqual(await stock(), [1,2])
+const incoming = (await db.query("select id, updated_at from history where kategori='masuk' and jumlah=5 limit 1")).rows[0]
+await assert.rejects(revise(incoming, revisedSale, true), /Stok tidak cukup/)
+assert.deepEqual(await stock(), [1,2])
 await db.exec(`set request.jwt.claim.sub='${other}'`)
 assert.equal((await db.query('select * from stores')).rows.length,0)
 assert.equal((await db.query('select * from products')).rows.length,0)
 assert.equal(await count(),0)
+assert.equal((await db.query('select * from audit_logs')).rows.length,0)
 await assert.rejects(call([{productId:p1,quantity:1}]), /akses ditolak/)
+await assert.rejects(revise(incoming, revisedSale, true), /akses ditolak/)
 await assert.rejects(db.exec(`insert into products(store_id,nama_barang,brand,harga,stok,barcode) values('${store}','bad','bad',1,1,'bad')`), /row-level security/)
 await db.exec(`reset role; set role anon;`)
 await assert.rejects(db.query('select * from stores'), /permission denied/)
@@ -79,4 +100,4 @@ try {
   assert.deepEqual(await stock(),[4]); assert.equal(await count(),1)
 } finally { await unlink(input); await unlink(output).catch(()=>{}); await rmdir(temp) }
 await db.close()
-console.log('PASS: migrations, stock in/out, atomic rollback including failed history insert, aggregated items, invalid quantities, idempotency, stock edit conflict/history, RLS isolation, denied direct stock/history writes, anonymous denial, cascade deletion, offline import and overwrite protection.')
+console.log('PASS: migrations, stock in/out, atomic rollback, idempotency, transaction revision/deletion and conflict, negative-stock protection, audit RLS, tenant isolation, offline import and overwrite protection.')

@@ -18,7 +18,7 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     create function auth.uid() returns uuid language sql as $$select '${uid}'::uuid$$;
     grant usage on schema public,auth to authenticated;
     insert into auth.users values('${uid}');`)
-  for(const file of ['001_inventory_schema.sql','002_inventory_transaction_rpc.sql']) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'))
+  for(const file of ['001_inventory_schema.sql','002_inventory_transaction_rpc.sql','003_transaction_revision_audit.sql']) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'))
   await db.exec(`set role authenticated;
     insert into stores(id,name) values('${store}','Toko SQL');
     insert into products(id,store_id,nama_barang,brand,harga,stok,barcode) values('${product}','${store}','Lampu Philips','Philips',15000,15,'12345');`)
@@ -36,9 +36,14 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
         if(loseResponse) {loseResponse=false;await route.fulfill({status:504,headers,json:{message:'network timeout',code:'504'}});return}
         await route.fulfill({headers,json:rows[0].result});return
       }
+      if(url.pathname==='/rest/v1/rpc/revise_inventory_transaction') {
+        const p=route.request().postDataJSON()
+        const {rows}=await db.query<{result: unknown}>('select revise_inventory_transaction($1,$2,$3,$4::jsonb,$5) as result',[p.p_store_id,p.p_history_id,p.p_expected_updated_at,JSON.stringify(p.p_change),p.p_delete])
+        await route.fulfill({headers,json:rows[0].result});return
+      }
       const table=url.pathname.split('/').pop()
-      if(method==='GET' && ['stores','products','history'].includes(table!)) {
-        const {rows}=await db.query(`select * from public.${table} order by id`)
+      if(method==='GET' && ['stores','products','history','audit_logs'].includes(table!)) {
+        const {rows}=await db.query(`select * from public.${table} ${table==='audit_logs' ? 'order by created_at desc limit 200' : 'order by id'}`)
         await route.fulfill({headers,json:rows});return
       }
       await route.fulfill({status:400,headers,json:{message:'Unexpected request'}})
@@ -67,10 +72,25 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     expect((await db.query<{stok:number}>('select stok from products')).rows[0].stok).toBe(18)
     expect((await db.query('select * from history')).rows).toHaveLength(2)
     expect(restRequests.filter(r=>r.startsWith('POST'))).toEqual(Array(3).fill('POST /rest/v1/rpc/process_inventory_transaction'))
+    await page.goto('/history.html')
+    await page.getByRole('row').filter({hasText:'Barang Masuk'}).getByRole('button',{name:'Edit transaksi Lampu Philips'}).click()
+    await page.getByLabel('Jumlah',{exact:true}).last().fill('4')
+    await page.getByRole('button',{name:'Simpan perubahan'}).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    expect((await db.query<{stok:number}>('select stok from products')).rows[0].stok).toBe(17)
+    await page.getByRole('row').filter({hasText:'Barang Masuk'}).getByRole('button',{name:'Hapus transaksi Lampu Philips'}).click()
+    await page.getByRole('dialog').getByRole('button',{name:'Hapus transaksi'}).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    expect((await db.query<{stok:number}>('select stok from products')).rows[0].stok).toBe(13)
+    expect((await db.query('select * from history')).rows).toHaveLength(1)
+    await page.goto('/pengaturan.html')
+    await expect(page.getByRole('heading',{name:'Logs Input'})).toBeVisible()
+    await expect(page.getByText('Hapus transaksi: Lampu Philips')).toBeVisible()
+    await expect(page.getByText('Edit transaksi: Lampu Philips')).toBeVisible()
     // Remote stock changed after confirmation was prepared: server validation wins.
     await page.getByRole('button',{name:'Buka Voice AI'}).click();await page.getByLabel('Perintah Anda').fill('jual lampu Philips sepuluh');await page.getByRole('button',{name:'Pahami perintah'}).click()
     await db.exec('reset role; update products set stok=1; set role authenticated;')
     await page.getByRole('button',{name:'Konfirmasi',exact:true}).click();await expect(page.getByRole('alert')).toContainText('tidak cukup')
-    expect((await db.query('select * from history')).rows).toHaveLength(2)
+    expect((await db.query('select * from history')).rows).toHaveLength(1)
   } finally {await db.close()}
 })

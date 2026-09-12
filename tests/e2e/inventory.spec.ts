@@ -77,6 +77,7 @@ test('Android native voice works with granted microphone permission and shade ac
   await page.addInitScript(() => {
     const calls: string[] = []
     const requests: { plugin: string; method: string; options: unknown }[] = []
+    const delivered: number[] = []
     const listeners: Record<string, (event: { actionId: string }) => void> = {}
     const methods = (names: string[]) => names.map(name => ({ name, rtype: name === 'addListener' ? 'callback' : 'promise' }))
     const fakeWindow = window as typeof window & {
@@ -85,15 +86,17 @@ test('Android native voice works with granted microphone permission and shade ac
       nativeCalls: string[]
       nativeRequests: typeof requests
       nativeListeners: typeof listeners
+      nativeDelivered: number[]
     }
     fakeWindow.androidBridge = {}
     fakeWindow.nativeCalls = calls
     fakeWindow.nativeRequests = requests
     fakeWindow.nativeListeners = listeners
+    fakeWindow.nativeDelivered = delivered
     fakeWindow.Capacitor = {
       PluginHeaders: [
         { name: 'SpeechRecognition', methods: methods(['checkPermissions', 'requestPermissions', 'available', 'start', 'stop']) },
-        { name: 'LocalNotifications', methods: methods(['addListener', 'removeListener', 'createChannel', 'registerActionTypes', 'checkPermissions', 'requestPermissions', 'schedule', 'cancel', 'removeDeliveredNotificationsById']) },
+        { name: 'LocalNotifications', methods: methods(['addListener', 'removeListener', 'createChannel', 'registerActionTypes', 'checkPermissions', 'requestPermissions', 'areEnabled', 'listChannels', 'schedule', 'getDeliveredNotifications', 'cancel', 'removeDeliveredNotificationsById']) },
       ],
       nativeCallback: (_plugin: string, _method: string, options: { eventName: string }, callback: (event: { actionId: string }) => void) => {
         listeners[options.eventName] = callback
@@ -105,6 +108,13 @@ test('Android native voice works with granted microphone permission and shade ac
         if (method === 'checkPermissions' || method === 'requestPermissions') {
           return Promise.resolve(plugin === 'SpeechRecognition' ? { speechRecognition: 'granted' } : { display: 'granted' })
         }
+        if (method === 'areEnabled') return Promise.resolve({ value: true })
+        if (method === 'listChannels') return Promise.resolve({ channels: [{ id: 'inventory_status_v2', importance: 3 }] })
+        if (method === 'schedule') {
+          delivered.push(...(options as { notifications: { id: number }[] }).notifications.map(notification => notification.id))
+          return Promise.resolve({ notifications: delivered.map(id => ({ id })) })
+        }
+        if (method === 'getDeliveredNotifications') return Promise.resolve({ notifications: delivered.map(id => ({ id })) })
         if (method === 'available') return Promise.resolve({ available: true })
         if (method === 'start') return Promise.resolve({ matches: ['transaksi lampu Philips dua'] })
         return Promise.resolve({})
@@ -121,7 +131,73 @@ test('Android native voice works with granted microphone permission and shade ac
   await page.evaluate(() => (window as typeof window & { nativeListeners: Record<string, (event: { actionId: string }) => void> }).nativeListeners.localNotificationActionPerformed({ actionId: 'voice' }))
   await expect(page.getByRole('dialog')).toContainText('Voice AI')
   await expect.poll(() => page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls.includes('LocalNotifications.schedule'))).toBe(true)
-  expect(await page.evaluate(() => (window as typeof window & { nativeRequests: { plugin: string; method: string; options: { notifications?: { actionTypeId?: string }[] } }[] }).nativeRequests.find(request => request.plugin === 'LocalNotifications' && request.method === 'schedule')?.options.notifications?.[0]?.actionTypeId)).toBe('inventory_actions')
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls.includes('LocalNotifications.getDeliveredNotifications'))).toBe(true)
+  expect(await page.evaluate(() => (window as typeof window & { nativeRequests: { plugin: string; method: string; options: { notifications?: { actionTypeId?: string; channelId?: string }[] } }[] }).nativeRequests.find(request => request.plugin === 'LocalNotifications' && request.method === 'schedule')?.options.notifications?.[0])).toMatchObject({ actionTypeId: 'inventory_actions', channelId: 'inventory_status_v2' })
+  const previousSchedules = await page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls.filter(call => call === 'LocalNotifications.schedule').length)
+  await page.evaluate(() => {
+    const native = window as typeof window & { nativeDelivered: number[] }
+    native.nativeDelivered.length = 0
+    window.dispatchEvent(new Event('focus'))
+  })
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls.filter(call => call === 'LocalNotifications.schedule').length)).toBe(previousSchedules + 1)
+})
+
+test('Android notification denial is visible and can be retried from the bell', async ({ page }) => {
+  await page.addInitScript(() => {
+    const calls: string[] = []
+    const fakeWindow = window as typeof window & { androidBridge: object; Capacitor: object; nativeCalls: string[] }
+    fakeWindow.androidBridge = {}
+    fakeWindow.nativeCalls = calls
+    fakeWindow.Capacitor = {
+      PluginHeaders: [{ name: 'LocalNotifications', methods: ['addListener', 'removeListener', 'checkPermissions', 'requestPermissions'].map(name => ({ name, rtype: name === 'addListener' ? 'callback' : 'promise' })) }],
+      nativeCallback: () => Promise.resolve('listener-1'),
+      nativePromise: (_plugin: string, method: string) => {
+        calls.push(method)
+        if (method === 'checkPermissions' || method === 'requestPermissions') return Promise.resolve({ display: 'denied' })
+        return Promise.resolve({})
+      },
+    }
+  })
+  await page.goto('/')
+  const retry = page.getByRole('button', { name: 'Periksa notifikasi Android' })
+  await expect(retry).toBeVisible()
+  await retry.click()
+  await expect(page.getByText('Izin notifikasi belum aktif.', { exact: false }).first()).toBeVisible()
+  expect(await page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls)).toContain('requestPermissions')
+  expect(await page.evaluate(() => (window as typeof window & { nativeCalls: string[] }).nativeCalls)).not.toContain('schedule')
+})
+
+test('edit and delete transactions update stock, revenue, and input logs', async ({ page }) => {
+  await page.goto('/history.html')
+  await expect(page.getByRole('heading', { name: 'History Barang' })).toBeVisible()
+  await page.getByRole('button', { name: 'Edit transaksi Speaker Bluetooth Mini' }).first().click()
+  await expect(page.getByRole('dialog')).toContainText('Edit transaksi')
+  await page.getByLabel('Jumlah', { exact: true }).last().fill('2')
+  await page.getByRole('button', { name: 'Simpan perubahan' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!).products.find((product: { barcode: string }) => product.barcode === '8991001000035').stok)).toBe(7)
+
+  await page.goto('/laporanpendapatan.html')
+  await page.getByRole('button', { name: 'Edit transaksi Speaker Bluetooth Mini' }).first().click()
+  await page.getByLabel('Harga satuan').fill('300000')
+  await page.getByRole('button', { name: 'Simpan perubahan' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!).history.find((item: { id: string }) => item.id === 'hst-002').harga)).toBe(300000)
+
+  await page.goto('/laporanbarangkeluar.html')
+  await page.getByRole('button', { name: 'Hapus transaksi Speaker Bluetooth Mini' }).first().click()
+  await expect(page.getByRole('dialog')).toContainText('Hapus transaksi?')
+  await page.getByRole('dialog').getByRole('button', { name: 'Hapus transaksi' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  const state = await page.evaluate(() => JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!))
+  expect(state.history.some((item: { id: string }) => item.id === 'hst-002')).toBe(false)
+  expect(state.products.find((product: { barcode: string }) => product.barcode === '8991001000035').stok).toBe(9)
+
+  await page.goto('/pengaturan.html')
+  await expect(page.getByRole('heading', { name: 'Logs Input' })).toBeVisible()
+  await page.getByRole('textbox', { name: 'Cari logs input' }).fill('Speaker Bluetooth Mini')
+  await expect(page.getByText('Hapus transaksi: Speaker Bluetooth Mini')).toBeVisible()
+  await expect(page.getByText('Edit transaksi: Speaker Bluetooth Mini').first()).toBeVisible()
 })
 
 for (const width of [320,360,375,390,412,430,768,1440]) {

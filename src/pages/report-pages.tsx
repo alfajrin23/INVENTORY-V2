@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/shared/data-state'
 import { GlassPanel } from '@/components/shared/glass-panel'
+import { TransactionActions, TransactionRevisionDialog, type RevisionAction } from '@/components/inventory/transaction-revision-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -85,6 +86,7 @@ function RevenueTabs() {
 
 function MovementReport({ category }: { category: TransactionCategory }) {
   const { history, loading, error, refresh } = useInventory()
+  const [revision, setRevision] = useState<{ item: HistoryItem; action: RevisionAction } | null>(null)
   const today = toInputDate(new Date())
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(today)
@@ -139,13 +141,14 @@ function MovementReport({ category }: { category: TransactionCategory }) {
             <TableSkeleton />
           </div>
         ) : rows.length ? (
-          <MovementTable rows={rows} />
+          <MovementTable rows={rows} onAction={(item, action) => setRevision({ item, action })} />
         ) : (
           <div className="p-5">
             <EmptyState title="Data kosong" description="Tidak ada transaksi pada rentang tanggal ini." />
           </div>
         )}
       </GlassPanel>
+      {revision && <TransactionRevisionDialog key={`${revision.item.id}-${revision.action}`} item={revision.item} action={revision.action} onClose={() => setRevision(null)} />}
     </div>
   )
 }
@@ -180,7 +183,7 @@ function DateField({
   )
 }
 
-function MovementTable({ rows }: { rows: HistoryItem[] }) {
+function MovementTable({ rows, onAction }: { rows: HistoryItem[]; onAction: (item: HistoryItem, action: RevisionAction) => void }) {
   return (
     <>
       <div className="hidden max-h-[620px] overflow-auto lg:block">
@@ -191,6 +194,7 @@ function MovementTable({ rows }: { rows: HistoryItem[] }) {
               <TableHead className="text-white/62">Nama Barang</TableHead>
               <TableHead className="text-white/62">Tanggal</TableHead>
               <TableHead className="text-white/62">Jumlah</TableHead>
+              <TableHead className="text-right text-white/62">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -203,6 +207,7 @@ function MovementTable({ rows }: { rows: HistoryItem[] }) {
                 </TableCell>
                 <TableCell className="text-white/62">{dateTimeLabel(item.tanggal)}</TableCell>
                 <TableCell className="font-mono text-white">{item.jumlah}</TableCell>
+                <TableCell><TransactionActions item={item} onAction={onAction} /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -214,6 +219,7 @@ function MovementTable({ rows }: { rows: HistoryItem[] }) {
             <p className="font-semibold text-white">{item.namaBarang}</p>
             <p className="text-sm text-white/52">{dateTimeLabel(item.tanggal)}</p>
             <p className="mt-3 font-mono text-white">Qty {item.jumlah}</p>
+            <TransactionActions item={item} onAction={onAction} />
           </div>
         ))}
       </div>
@@ -511,6 +517,13 @@ function RevenueReportShell({
   total: number
   controls: ReactNode
 }) {
+  const { history } = useInventory()
+  const [revision, setRevision] = useState<{ item: HistoryItem; action: RevisionAction } | null>(null)
+  const historyById = useMemo(() => new Map(history.map(item => [item.id, item])), [history])
+  const openRevision = (id: string, action: RevisionAction) => {
+    const item = historyById.get(id)
+    if (item) setRevision({ item, action })
+  }
   if (error) {
     return <ErrorState message={error} onRetry={() => void onRetry()} />
   }
@@ -554,18 +567,19 @@ function RevenueReportShell({
             <TableSkeleton />
           </div>
         ) : rows.length ? (
-          <RevenueTable rows={rows} />
+          <RevenueTable rows={rows} historyById={historyById} onAction={openRevision} />
         ) : (
           <div className="p-5">
             <EmptyState title="Pendapatan kosong" description="Tidak ada transaksi keluar pada periode ini." />
           </div>
         )}
       </GlassPanel>
+      {revision && <TransactionRevisionDialog key={`${revision.item.id}-${revision.action}`} item={revision.item} action={revision.action} onClose={() => setRevision(null)} />}
     </div>
   )
 }
 
-function RevenueTable({ rows }: { rows: RevenueRow[] }) {
+function RevenueTable({ rows, historyById, onAction }: { rows: RevenueRow[]; historyById: Map<string, HistoryItem>; onAction: (id: string, action: RevisionAction) => void }) {
   return (
     <>
       <div className="hidden max-h-[620px] overflow-auto lg:block">
@@ -577,6 +591,7 @@ function RevenueTable({ rows }: { rows: RevenueRow[] }) {
               <TableHead className="text-white/62">Qty</TableHead>
               <TableHead className="text-right text-white/62">Harga</TableHead>
               <TableHead className="text-right text-white/62">Total</TableHead>
+              <TableHead className="text-right text-white/62">Aksi</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -587,6 +602,7 @@ function RevenueTable({ rows }: { rows: RevenueRow[] }) {
                 <TableCell className="font-mono text-white">{row.qty}</TableCell>
                 <TableCell className="text-right font-mono text-white/72">{formatCurrency(row.harga)}</TableCell>
                 <TableCell className="text-right font-mono text-white">{formatCurrency(row.total)}</TableCell>
+                <TableCell>{historyById.has(row.id) && <TransactionActions item={historyById.get(row.id)!} onAction={(_, action) => onAction(row.id, action)} />}</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -603,6 +619,7 @@ function RevenueTable({ rows }: { rows: RevenueRow[] }) {
               <Badge className="bg-emerald-300/14 text-emerald-100">{row.qty}</Badge>
             </div>
             <p className="mt-3 text-right font-mono text-white">{formatCurrency(row.total)}</p>
+            {historyById.has(row.id) && <TransactionActions item={historyById.get(row.id)!} onAction={(_, action) => onAction(row.id, action)} />}
           </div>
         ))}
       </div>

@@ -7,6 +7,7 @@ import type {
   ProductInput,
   StoreInput,
   StoreRecord,
+  TransactionChange,
   TransactionInput,
   TransactionResult,
 } from '@/lib/types'
@@ -24,6 +25,7 @@ type InventoryContextValue = InventorySnapshot & {
   updateProduct: (id: string, product: ProductInput, expectedStock?: number) => Promise<void>
   deleteProduct: (id: string) => Promise<void>
   processTransaction: (input: TransactionInput) => Promise<HistoryItem[]>
+  reviseTransaction: (current: HistoryItem, change: TransactionChange | null) => Promise<void>
 }
 
 const emptySnapshot: InventorySnapshot = {
@@ -137,6 +139,11 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       delete pending[signature]
       sessionStorage.setItem('inventory-pending-transaction', JSON.stringify(pending))
       return result.history
+    }),
+    reviseTransaction: (current, change) => exclusive(async () => {
+      if (current.storeId !== snapshot.activeStore?.id) throw new Error('Transaksi bukan milik toko aktif')
+      await repository.reviseTransaction(current, change)
+      await refresh(true)
     }),
   }), [snapshot, loading, error, refresh, mergeResult, exclusive])
 

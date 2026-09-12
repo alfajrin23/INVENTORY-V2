@@ -1,8 +1,8 @@
 import { databaseError, requireSupabase } from '@/lib/supabase'
 import type { InventoryRepository } from '@/lib/inventory-service'
-import type { HistoryItem, Product, ProductInput, StoreInput, StoreRecord, TransactionResult } from '@/lib/types'
+import type { AuditLog, HistoryItem, Product, ProductInput, StoreInput, StoreRecord, TransactionResult } from '@/lib/types'
 
-const names: Record<string, string> = { store_id: 'storeId', nama_barang: 'namaBarang', address_link: 'addressLink', created_at: 'createdAt', updated_at: 'updatedAt' }
+const names: Record<string, string> = { store_id: 'storeId', product_id: 'productId', actor_id: 'actorId', record_id: 'recordId', before_data: 'beforeData', after_data: 'afterData', nama_barang: 'namaBarang', address_link: 'addressLink', created_at: 'createdAt', updated_at: 'updatedAt' }
 function fromRow<T>(row: Record<string, unknown>): T {
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [names[key] ?? key, value])) as T
 }
@@ -77,5 +77,22 @@ export const supabaseRepository: InventoryRepository = {
     })
     if (error) throw databaseError(error)
     return result(data)
+  },
+  async reviseTransaction(current, change) {
+    if (!current.updatedAt) throw new Error('Migrasi transaksi terbaru belum terpasang. Hubungi administrator.')
+    const { data, error } = await requireSupabase().rpc('revise_inventory_transaction', {
+      p_store_id: current.storeId,
+      p_history_id: current.id,
+      p_expected_updated_at: current.updatedAt,
+      p_change: change,
+      p_delete: change === null,
+    })
+    if (error) throw databaseError(error)
+    return { ...result(data), deletedId: data.deletedId }
+  },
+  async getAuditLogs(storeId) {
+    const { data, error } = await requireSupabase().from('audit_logs').select('*').eq('store_id', storeId).order('created_at', { ascending: false }).limit(200)
+    if (error) throw databaseError(error)
+    return data.map(fromRow<AuditLog>)
   },
 }

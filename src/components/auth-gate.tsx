@@ -72,18 +72,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const title = mode === 'reset-password' ? 'Buat password baru' : mode === 'request-reset' ? 'Pulihkan akun' : 'Masuk ke Inventory'
 
   return <main className="auth-page">
-    <header className="auth-brand">
-      <span className="auth-brand-mark">AB</span>
-      <span><strong>ABElektronik</strong><small>Inventory</small></span>
-    </header>
     <div className="auth-shell">
       <div className={`auth-mascot${coverEyes ? ' auth-mascot--covered' : ''}`} aria-hidden="true">
-        <img className="auth-mascot-open" src="/husky-login.png" alt="" draggable={false} />
-        <img className="auth-mascot-covered" src="/husky-password.png" alt="" draggable={false} />
+        <span className="auth-mascot-open" />
+        <span className="auth-mascot-covered" />
       </div>
       <section className="auth-panel" aria-label={title}>
         <h1>{title}</h1>
-        <p className="auth-intro">{mode === 'login' ? 'Selamat datang kembali. Husky menjaga toko Anda.' : mode === 'request-reset' ? 'Masukkan email akun untuk menerima tautan pemulihan.' : 'Masukkan password baru untuk akun Anda.'}</p>
+        <p className="auth-intro">{mode === 'login' ? 'Selamat datang kembali. Kucing putih menjaga toko Anda.' : mode === 'request-reset' ? 'Masukkan email akun untuk menerima tautan pemulihan.' : 'Masukkan password baru untuk akun Anda.'}</p>
         {!supabase ? <p className="auth-alert" role="alert">Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.</p> :
           <form onSubmit={submit} className="auth-form">
             {mode !== 'reset-password' && <div className="auth-field">

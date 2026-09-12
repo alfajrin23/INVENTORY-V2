@@ -24,6 +24,7 @@ export type Product = {
 
 export type HistoryItem = {
   id: string
+  productId?: string | null
   barcode: string
   tanggal: string
   namaBarang: string
@@ -34,7 +35,32 @@ export type HistoryItem = {
   keterangan?: string
   storeId: string
   oleh?: string
+  updatedAt?: string
 }
+
+export type AuditLog = {
+  id: string
+  storeId: string
+  actorId?: string | null
+  entity: 'store' | 'product' | 'transaction'
+  action: 'insert' | 'update' | 'delete'
+  recordId: string
+  beforeData: Record<string, unknown> | null
+  afterData: Record<string, unknown> | null
+  createdAt: string
+}
+
+export type TransactionChange = {
+  productId: string
+  category: TransactionCategory
+  quantity: number
+  price: number
+  date: string
+  note: string
+  operator: string
+}
+
+export type TransactionRevisionResult = TransactionResult & { deletedId?: string }
 
 export type CartItem = {
   product: Product

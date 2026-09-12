@@ -2,6 +2,7 @@ import { ArrowDownCircle, ArrowUpCircle, CalendarDays, Filter, Plus, ScanLine, S
 import { useMemo, useState } from 'react'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
+import { TransactionActions, TransactionRevisionDialog, type RevisionAction } from '@/components/inventory/transaction-revision-dialog'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/shared/data-state'
 import { GlassPanel } from '@/components/shared/glass-panel'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { dateTimeLabel, formatCurrency, matchProduct, toInputDate } from '@/lib/format'
-import type { Product, TransactionCategory } from '@/lib/types'
+import type { HistoryItem, Product, TransactionCategory } from '@/lib/types'
 
 type CategoryFilter = 'semua' | TransactionCategory
 
@@ -41,6 +42,7 @@ export function HistoryPage() {
   const [date, setDate] = useState(toInputDate(new Date()))
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const [revision, setRevision] = useState<{ item: HistoryItem; action: RevisionAction } | null>(null)
 
   const filteredHistory = useMemo(() => {
     const normalized = search.trim().toLocaleLowerCase('id-ID')
@@ -193,6 +195,7 @@ export function HistoryPage() {
                     <TableHead className="text-white/62">Tanggal</TableHead>
                     <TableHead className="text-white/62">Keterangan</TableHead>
                     <TableHead className="text-right text-white/62">Nilai</TableHead>
+                    <TableHead className="text-right text-white/62">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -212,6 +215,7 @@ export function HistoryPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</TableCell>
+                      <TableCell><TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} /></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -240,6 +244,7 @@ export function HistoryPage() {
                       <p className="font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</p>
                     </div>
                   </div>
+                  <TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} />
                 </div>
               ))}
             </div>
@@ -372,6 +377,8 @@ export function HistoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {revision && <TransactionRevisionDialog key={`${revision.item.id}-${revision.action}`} item={revision.item} action={revision.action} onClose={() => setRevision(null)} />}
 
       <ScannerDialog
         open={scannerOpen}
