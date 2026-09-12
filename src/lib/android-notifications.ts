@@ -33,26 +33,47 @@ export async function registerInventoryNotification() {
   })
 }
 
+/**
+ * Menyiapkan notifikasi tanpa mengganggu user saat aplikasi baru dibuka.
+ * Permission prompt hanya boleh muncul setelah aksi eksplisit user (tombol lonceng).
+ */
 export async function prepareInventoryNotification(requestPermission = false) {
   let permission = await LocalNotifications.checkPermissions()
-  if (permission.display !== 'granted' && (requestPermission || permission.display === 'prompt')) {
+
+  if (permission.display !== 'granted') {
+    if (!requestPermission) return false
     permission = await LocalNotifications.requestPermissions()
   }
+
   if (permission.display !== 'granted') {
     throw new Error('Izin notifikasi belum aktif. Izinkan notifikasi aplikasi di Pengaturan Android, lalu ketuk lonceng.')
   }
+
   const enabled = await LocalNotifications.areEnabled()
   if (!enabled.value) {
+    if (!requestPermission) return false
     throw new Error('Notifikasi aplikasi dimatikan di Pengaturan Android. Aktifkan lalu ketuk lonceng.')
   }
+
   await registerInventoryNotification()
   const channels = await LocalNotifications.listChannels().catch(() => ({ channels: [] }))
   if (channels.channels.some(channel => channel.id === INVENTORY_NOTIFICATION_CHANNEL && channel.importance === 0)) {
+    if (!requestPermission) return false
     throw new Error('Channel Status Inventory dimatikan di Pengaturan Android. Aktifkan lalu ketuk lonceng.')
   }
+
+  return true
 }
 
 export async function showInventoryNotification(storeName: string, products: Product[]) {
+  // Jangan mencoba menjadwalkan notifikasi bila user belum mengizinkan.
+  // Ini penting agar resume/focus aplikasi tidak memunculkan alur permission berulang.
+  const permission = await LocalNotifications.checkPermissions()
+  if (permission.display !== 'granted') return false
+
+  const enabled = await LocalNotifications.areEnabled()
+  if (!enabled.value) return false
+
   const content = inventoryNotificationContent(storeName, products)
   await LocalNotifications.schedule({ notifications: [{
     id: INVENTORY_NOTIFICATION_ID,
@@ -69,6 +90,8 @@ export async function showInventoryNotification(storeName: string, products: Pro
   if (!delivered.notifications.some(notification => notification.id === INVENTORY_NOTIFICATION_ID)) {
     throw new Error('Notifikasi belum muncul di panel Android. Periksa izin aplikasi dan channel Status Inventory.')
   }
+
+  return true
 }
 
 export async function clearInventoryNotification() {
