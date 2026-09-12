@@ -30,13 +30,27 @@ async function stores() { return (await readRows('stores')).map(fromRow<StoreRec
 export const supabaseRepository: InventoryRepository = {
   mode: 'supabase',
   fetchStores: stores,
-  async getSnapshot() {
-    const allStores = await stores()
-    const activeStore = allStores.find(s => s.id === localStorage.getItem('activeStoreId')) ?? allStores[0] ?? null
-    if (!activeStore) return { stores: allStores, activeStore, products: [], history: [] }
+  async getSnapshot(onProducts) {
+    const storedId = localStorage.getItem('activeStoreId')
+    const storesRequest = stores()
+    const productRequest = storedId ? readRows('products', storedId) : null
+    const historyRequest = storedId ? readRows('history', storedId) : null
+    // A store can be removed while its cached ID remains in this browser.
+    void productRequest?.catch(() => undefined)
+    void historyRequest?.catch(() => undefined)
+    const allStores = await storesRequest
+    const activeStore = allStores.find(s => s.id === storedId) ?? allStores[0] ?? null
+    if (!activeStore) {
+      const empty = { stores: allStores, activeStore: null, products: [], history: [] }
+      onProducts?.(empty)
+      return empty
+    }
     localStorage.setItem('activeStoreId', activeStore.id)
-    const [products, history] = await Promise.all([readRows('products', activeStore.id), readRows('history', activeStore.id)])
-    return { stores: allStores, activeStore, products: products.map(fromRow<Product>), history: history.map(fromRow<HistoryItem>) }
+    const productRows = await (storedId === activeStore.id ? productRequest! : readRows('products', activeStore.id))
+    const products = productRows.map(fromRow<Product>)
+    onProducts?.({ stores: allStores, activeStore, products, history: [] })
+    const historyRows = await (storedId === activeStore.id ? historyRequest! : readRows('history', activeStore.id))
+    return { stores: allStores, activeStore, products, history: historyRows.map(fromRow<HistoryItem>) }
   },
   async setActiveStore(id) { localStorage.setItem('activeStoreId', id) },
   async addStore(store) {

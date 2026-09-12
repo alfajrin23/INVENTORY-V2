@@ -14,6 +14,7 @@ import type {
 
 type InventoryContextValue = InventorySnapshot & {
   loading: boolean
+  productsReady: boolean
   error: string | null
   mode: 'supabase' | 'demo'
   refresh: () => Promise<void>
@@ -41,21 +42,39 @@ const repository = getInventoryRepository()
 export function InventoryProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<InventorySnapshot>(emptySnapshot)
   const [loading, setLoading] = useState(true)
+  const [productsReady, setProductsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const generation = useRef(0)
   const mutation = useRef(false)
   const snapshotRequest = useRef<Promise<InventorySnapshot> | null>(null)
+  const requestEpoch = useRef(0)
+  const productsReadyRef = useRef(false)
+  const lastRefreshAt = useRef(0)
 
   const refresh = useCallback(async (background = false) => {
     const version = ++generation.current
     if (!background) setLoading(true)
     setError(null)
-    const request = snapshotRequest.current ?? repository.getSnapshot()
-    snapshotRequest.current = request
+    let request = snapshotRequest.current
+    if (!request) {
+      const epoch = ++requestEpoch.current
+      request = repository.getSnapshot((partial) => {
+        if (epoch !== requestEpoch.current || productsReadyRef.current) return
+        productsReadyRef.current = true
+        setProductsReady(true)
+        setSnapshot(partial)
+      })
+      snapshotRequest.current = request
+    }
     try {
       const next = await request
-      if (version === generation.current) setSnapshot(next)
+      if (version === generation.current) {
+        lastRefreshAt.current = Date.now()
+        productsReadyRef.current = true
+        setProductsReady(true)
+        setSnapshot(next)
+      }
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Gagal memuat data inventory'
       if (version === generation.current) setError(message)
@@ -82,24 +101,30 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     if (mutation.current) throw new Error('Permintaan sedang diproses. Tunggu sebentar.')
     mutation.current = true
     ++generation.current
+    ++requestEpoch.current
     snapshotRequest.current = null
     try { return await action() } finally { mutation.current = false; setLoading(false) }
   }, [])
 
   useEffect(() => {
-    const update = () => { if (!mutation.current && document.visibilityState === 'visible') void refresh(true) }
+    const update = () => {
+      if (!mutation.current && !snapshotRequest.current && document.visibilityState === 'visible' && Date.now() - lastRefreshAt.current > 15000) void refresh(true)
+    }
+    const reconnect = () => { if (!mutation.current && !snapshotRequest.current) void refresh(true) }
     window.addEventListener('focus', update)
-    window.addEventListener('online', update)
+    window.addEventListener('online', reconnect)
     const timer = window.setInterval(update, 60000)
-    return () => { window.removeEventListener('focus', update); window.removeEventListener('online', update); window.clearInterval(timer) }
+    return () => { window.removeEventListener('focus', update); window.removeEventListener('online', reconnect); window.clearInterval(timer) }
   }, [refresh])
 
   const value = useMemo<InventoryContextValue>(() => ({
-    ...snapshot, loading, error, mode: repository.mode, refresh,
+    ...snapshot, loading, productsReady, error, mode: repository.mode, refresh,
     setActiveStore: storeId => exclusive(async () => {
       if (snapshot.activeStore?.id === storeId) return
       if (!snapshot.stores.some(s => s.id === storeId)) throw new Error('Toko tidak ditemukan')
       await repository.setActiveStore(storeId)
+      productsReadyRef.current = false
+      setProductsReady(false)
       setSnapshot(current => ({ ...current, activeStore: current.stores.find(s => s.id === storeId) ?? null, products: [], history: [] }))
       await refresh()
     }),
@@ -145,7 +170,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       await repository.reviseTransaction(current, change)
       await refresh(true)
     }),
-  }), [snapshot, loading, error, refresh, mergeResult, exclusive])
+  }), [snapshot, loading, productsReady, error, refresh, mergeResult, exclusive])
 
   return <InventoryContext.Provider value={value}>{children}</InventoryContext.Provider>
 }

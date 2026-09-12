@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { parseVoiceCommand, parseVoiceDraftEdit, matchVoiceProducts } from '../../src/lib/voice-command'
 import { lookupScannedProduct } from '../../src/lib/barcode-product-reference'
+import { getDailyRevenueSeries } from '../../src/lib/analytics'
 
 const routes = ['/', '/databarang.html', '/history.html', '/laporan.html', '/laporanbarangmasuk.html', '/laporanbarangkeluar.html', '/laporanstokbarang.html', '/laporanpendapatan.html', '/pendapatanharian.html', '/pendapatanmingguan.html', '/pendapatanbulanan.html', '/pengaturan.html', '/profilsetting.html']
 async function data(page: Page) { return page.evaluate(() => JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!)) }
@@ -57,6 +58,16 @@ test('parser understands Indonesian intents, numbers, aliases and multiple items
   expect(matchVoiceProducts('lampu Philips 9 watt',[product])).toHaveLength(0)
   const speaker = { id:'2', namaBarang:'Speaker Aktif 8 Inch', brand:'ACR', stok:15, harga:1, barcode:'2', storeId:'1', createdAt:'' }
   expect(matchVoiceProducts('spiker acer',[speaker])[0].product.id).toBe('2')
+})
+
+test('seven-day chart counts only outgoing transactions for each day', () => {
+  const today = new Date().toISOString()
+  const rows = [
+    { tanggal: today, kategori: 'keluar', harga: 15000, jumlah: 2 },
+    { tanggal: today, kategori: 'masuk', harga: 50000, jumlah: 4 },
+  ] as Parameters<typeof getDailyRevenueSeries>[0]
+  const current = getDailyRevenueSeries(rows).at(-1)
+  expect(current).toMatchObject({ pendapatan: 30000, transaksi: 1 })
 })
 
 test('barcode lookup fills product draft from store, scan text and brand reference', () => {
@@ -250,6 +261,33 @@ test('add, edit, barcode export, search, delete product', async ({ page }) => {
   page.on('dialog',d=>d.accept())
   await page.getByRole('button',{name:'Hapus Lampu Philips'}).click()
   await expect(page.getByText('Produk tidak ditemukan')).toBeVisible()
+})
+
+test('large product lists render one page and keep search responsive', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/databarang.html')
+  await page.evaluate(() => {
+    const key = 'ab-elektronik-v2-data'
+    const state = JSON.parse(localStorage.getItem(key)!)
+    const storeId = state.stores[0].id
+    state.products.push(...Array.from({ length: 240 }, (_, index) => ({
+      id: `perf-${index}`, namaBarang: `Produk Performa ${index}`, brand: 'ZZZ',
+      harga: 1000, stok: 10, barcode: `PERF${index}`, storeId, createdAt: new Date().toISOString(),
+    })))
+    localStorage.setItem(key, JSON.stringify(state))
+  })
+  await page.reload()
+  await expect(page.locator('table tbody tr')).toHaveCount(24)
+  await page.getByRole('button', { name: 'Halaman berikutnya' }).click()
+  await expect(page.getByText(/^2\/\d+$/)).toBeVisible()
+  await page.getByPlaceholder('Cari nama barang, brand, barcode').fill('Produk Performa 149')
+  await expect(page.locator('table tbody tr')).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Edit Produk Performa 149' }).first()).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByPlaceholder('Cari nama barang, brand, barcode').fill('')
+  await expect(page.getByRole('button', { name: 'Halaman berikutnya' })).toBeVisible()
+  await page.getByRole('button', { name: 'Halaman berikutnya' }).click()
+  await expect(page.getByText(/^2\/\d+$/)).toBeVisible()
 })
 
 test('add product scanner recognizes draft reference and keeps fields editable', async ({page}) => {

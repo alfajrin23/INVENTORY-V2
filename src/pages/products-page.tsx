@@ -1,6 +1,8 @@
 import JsBarcode from 'jsbarcode'
 import {
   Barcode,
+  ChevronLeft,
+  ChevronRight,
   Download,
   Edit3,
   Eye,
@@ -10,7 +12,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/shared/data-state'
@@ -56,6 +58,9 @@ const emptyForm: ProductFormState = {
   stok: '1',
   barcode: '',
 }
+
+const PRODUCTS_PER_PAGE = 24
+const productBrandCollator = new Intl.Collator('id-ID', { sensitivity: 'base' })
 
 const scanSourceLabels: Record<ProductScanSuggestion['source'], string> = {
   store: 'Data toko',
@@ -173,6 +178,7 @@ export function ProductsPage() {
     activeStore,
     products,
     loading,
+    productsReady,
     error,
     refresh,
     addProduct,
@@ -182,6 +188,8 @@ export function ProductsPage() {
   const { showToast } = useToast()
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
+  const [page, setPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -193,13 +201,21 @@ export function ProductsPage() {
   const [scanSuggestion, setScanSuggestion] = useState<ProductScanSuggestion | null>(null)
 
   const filteredProducts = useMemo(() => {
-    const result = search.trim() ? products.filter((product) => matchProduct(product, search)) : products
-    return [...result].sort((a, b) => a.brand.localeCompare(b.brand, 'id-ID'))
-  }, [products, search])
+    const result = deferredSearch.trim() ? products.filter((product) => matchProduct(product, deferredSearch)) : products
+    return [...result].sort((a, b) => productBrandCollator.compare(a.brand, b.brand))
+  }, [products, deferredSearch])
+
+  const lastPage = Math.max(0, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE) - 1)
+  const visiblePage = Math.min(page, lastPage)
+  const visibleProducts = useMemo(
+    () => filteredProducts.slice(visiblePage * PRODUCTS_PER_PAGE, (visiblePage + 1) * PRODUCTS_PER_PAGE),
+    [filteredProducts, visiblePage],
+  )
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
 
   const selectedProducts = useMemo(
-    () => products.filter((product) => selectedIds.includes(product.id)),
-    [products, selectedIds],
+    () => products.filter((product) => selectedIdSet.has(product.id)),
+    [products, selectedIdSet],
   )
 
   const names = useMemo(
@@ -210,6 +226,11 @@ export function ProductsPage() {
     () => Array.from(new Set([...products.map((product) => product.brand), ...productReferenceBrands])).slice(0, 30),
     [products],
   )
+
+  useEffect(() => {
+    setPage(0)
+    setSelectedIds([])
+  }, [activeStore?.id])
 
   useEffect(() => {
     const pendingBarcode = sessionStorage.getItem('pendingBarcode')
@@ -282,7 +303,14 @@ export function ProductsPage() {
   }
 
   const handleSelectAll = (checked: boolean) => {
-    setSelectedIds(checked ? filteredProducts.map((product) => product.id) : [])
+    setSelectedIds(current => {
+      const next = new Set(current)
+      for (const product of filteredProducts) {
+        if (checked) next.add(product.id)
+        else next.delete(product.id)
+      }
+      return [...next]
+    })
   }
 
   const handleDelete = async (product: Product) => {
@@ -400,7 +428,7 @@ export function ProductsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/42" />
             <Input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => { setSearch(event.target.value); setPage(0) }}
               placeholder="Cari nama barang, brand, barcode"
               className="h-11 border-white/12 bg-white/[0.07] pl-10 text-white placeholder:text-white/38"
             />
@@ -413,7 +441,7 @@ export function ProductsPage() {
       </GlassPanel>
 
       <GlassPanel className="overflow-hidden p-0" glow="emerald">
-        {loading ? (
+        {loading && !productsReady ? (
           <div className="p-5">
             <TableSkeleton />
           </div>
@@ -425,7 +453,7 @@ export function ProductsPage() {
                   <TableRow className="border-white/10 hover:bg-transparent">
                     <TableHead className="w-12">
                       <Checkbox
-                        checked={filteredProducts.length > 0 && selectedIds.length === filteredProducts.length}
+                        checked={filteredProducts.length > 0 && filteredProducts.every(product => selectedIdSet.has(product.id))}
                         onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
                         aria-label="Pilih semua produk"
                       />
@@ -439,19 +467,19 @@ export function ProductsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredProducts.map((product, index) => (
+                  {visibleProducts.map((product, index) => (
                     <TableRow
                       key={product.id}
                       className="border-white/10 transition hover:bg-cyan-300/[0.06]"
                     >
                       <TableCell>
                         <Checkbox
-                          checked={selectedIds.includes(product.id)}
+                          checked={selectedIdSet.has(product.id)}
                           onCheckedChange={() => toggleSelect(product.id)}
                           aria-label={`Pilih ${product.namaBarang}`}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-white/58">{index + 1}</TableCell>
+                      <TableCell className="font-mono text-white/58">{visiblePage * PRODUCTS_PER_PAGE + index + 1}</TableCell>
                       <TableCell>
                         <p className="font-semibold text-white">{product.namaBarang}</p>
                         <p className="font-mono text-xs text-white/42">{product.barcode}</p>
@@ -483,7 +511,7 @@ export function ProductsPage() {
             </div>
 
             <div className="space-y-3 p-4 lg:hidden">
-              {filteredProducts.map((product) => (
+              {visibleProducts.map((product) => (
                 <div
                   key={product.id}
                   className="rounded-xl border border-white/10 bg-white/[0.055] p-4"
@@ -493,7 +521,7 @@ export function ProductsPage() {
                       <p className="truncate font-semibold text-white">{product.namaBarang}</p>
                       <p className="text-sm text-white/52">{product.brand}</p>
                     </div>
-                    <Checkbox aria-label={`Pilih ${product.namaBarang}`} checked={selectedIds.includes(product.id)} onCheckedChange={() => toggleSelect(product.id)} />
+                    <Checkbox aria-label={`Pilih ${product.namaBarang}`} checked={selectedIdSet.has(product.id)} onCheckedChange={() => toggleSelect(product.id)} />
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div>
@@ -518,6 +546,16 @@ export function ProductsPage() {
                 </div>
               ))}
             </div>
+            {filteredProducts.length > PRODUCTS_PER_PAGE && (
+              <div className="flex flex-wrap items-center justify-start gap-6 border-t border-white/10 px-4 py-3 text-sm text-white/60">
+                <span>{visiblePage * PRODUCTS_PER_PAGE + 1}-{Math.min((visiblePage + 1) * PRODUCTS_PER_PAGE, filteredProducts.length)} dari {formatNumber(filteredProducts.length)} produk</span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon" aria-label="Halaman sebelumnya" title="Halaman sebelumnya" disabled={visiblePage === 0} onClick={() => setPage(visiblePage - 1)}><ChevronLeft className="size-4" /></Button>
+                  <span className="min-w-14 text-center">{visiblePage + 1}/{lastPage + 1}</span>
+                  <Button type="button" variant="outline" size="icon" aria-label="Halaman berikutnya" title="Halaman berikutnya" disabled={visiblePage === lastPage} onClick={() => setPage(visiblePage + 1)}><ChevronRight className="size-4" /></Button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="p-5">

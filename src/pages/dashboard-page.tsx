@@ -8,6 +8,7 @@ import {
   WalletCards,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { useMemo } from 'react'
 import {
   Bar,
   BarChart,
@@ -26,6 +27,7 @@ import { GlassPanel } from '@/components/shared/glass-panel'
 import { MetricCard } from '@/components/shared/metric-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useInventory } from '@/hooks/use-inventory'
 import { getDailyRevenueSeries, getDashboardMetrics, getTopProductsThisMonth } from '@/lib/analytics'
@@ -33,11 +35,11 @@ import { dateTimeLabel, formatCurrency, formatNumber } from '@/lib/format'
 import { routes } from '@/lib/navigation'
 
 export function DashboardPage() {
-  const { products, history, loading, error, refresh } = useInventory()
-  const metrics = getDashboardMetrics(products, history)
-  const dailyRevenue = getDailyRevenueSeries(history)
-  const topProducts = getTopProductsThisMonth(history)
-  const recentHistory = history.slice(0, 6)
+  const { products, history, loading, productsReady, error, refresh } = useInventory()
+  const metrics = useMemo(() => getDashboardMetrics(products, history), [products, history])
+  const dailyRevenue = useMemo(() => getDailyRevenueSeries(history), [history])
+  const topProducts = useMemo(() => getTopProductsThisMonth(history), [history])
+  const recentHistory = useMemo(() => history.slice(0, 6), [history])
 
   if (error) {
     return <ErrorState message={error} onRetry={() => void refresh()} />
@@ -46,18 +48,18 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <section className="dashboard-metrics grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {loading ? (
+        {loading && !productsReady ? (
           <LoadingGrid rows={4} className="md:col-span-2 xl:col-span-4 xl:grid-cols-4" />
         ) : (
           <>
-            <MetricCard
+            {loading ? <Skeleton className="h-32 rounded-lg bg-white/10" /> : <MetricCard
               label="Pendapatan Hari Ini"
               value={metrics.todayRevenueLabel}
               detail="Transaksi keluar tersimpan"
               trend={metrics.revenueTrend}
               icon={<WalletCards className="size-5" />}
               accent="emerald"
-            />
+            />}
             <MetricCard
               label="Total Produk"
               value={formatNumber(metrics.totalProducts)}
@@ -65,13 +67,13 @@ export function DashboardPage() {
               icon={<Package className="size-5" />}
               accent="cyan"
             />
-            <MetricCard
+            {loading ? <Skeleton className="h-32 rounded-lg bg-white/10" /> : <MetricCard
               label="Transaksi Hari Ini"
               value={formatNumber(metrics.todayTransactions)}
               detail="Barang keluar tercatat"
               icon={<ReceiptText className="size-5" />}
               accent="violet"
-            />
+            />}
             <MetricCard
               label="Stok Rendah"
               value={formatNumber(metrics.lowStockCount)}
@@ -93,7 +95,7 @@ export function DashboardPage() {
             <Badge className="bg-cyan-300/15 text-cyan-100">Mixed chart</Badge>
           </div>
           <div className="h-[290px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {loading ? <Skeleton className="h-full w-full rounded-lg bg-white/10" /> : <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={dailyRevenue} margin={{ top: 10, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="rgba(255,255,255,0.08)" vertical={false} />
                 <XAxis dataKey="hari" stroke="rgba(255,255,255,0.55)" tickLine={false} axisLine={false} />
@@ -119,7 +121,7 @@ export function DashboardPage() {
                 <Bar yAxisId="revenue" dataKey="pendapatan" fill="#00d2ff" radius={[8, 8, 0, 0]} />
                 <Line yAxisId="transactions" type="monotone" dataKey="transaksi" stroke="#ffb454" strokeWidth={3} dot={{ r: 4 }} />
               </ComposedChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer>}
           </div>
         </GlassPanel>
 
@@ -132,7 +134,7 @@ export function DashboardPage() {
             <Badge className="bg-violet-300/15 text-violet-100">Top 10</Badge>
           </div>
           <div className="h-[290px]">
-            {topProducts.length ? (
+            {loading ? <Skeleton className="h-full w-full rounded-lg bg-white/10" /> : topProducts.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={topProducts} layout="vertical" margin={{ top: 4, right: 20, left: 8, bottom: 4 }}>
                   <CartesianGrid stroke="rgba(255,255,255,0.08)" horizontal={false} />

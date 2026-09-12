@@ -39,24 +39,20 @@ export function getDashboardMetrics(products: Product[], history: HistoryItem[])
 }
 
 export function getDailyRevenueSeries(history: HistoryItem[]) {
-  return Array.from({ length: 7 })
-    .map((_, index) => {
-      const date = new Date()
-      date.setDate(date.getDate() - (6 - index))
-      const start = startOfDay(date)
-      const end = endOfDay(date)
-      const sales = history.filter(
-        (item) => item.kategori === 'keluar' && isWithinDateRange(item.tanggal, start, end),
-      )
-      const revenue = sales.reduce((sum, item) => sum + item.harga * item.jumlah, 0)
-
-      return {
-        tanggal: toInputDate(date),
-        hari: indonesiaDays[date.getDay()],
-        pendapatan: revenue,
-        transaksi: sales.length,
-      }
-    })
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date()
+    date.setDate(date.getDate() - (6 - index))
+    return { tanggal: toInputDate(date), hari: indonesiaDays[date.getDay()], pendapatan: 0, transaksi: 0 }
+  })
+  const byDate = new Map(days.map(day => [day.tanggal, day]))
+  for (const item of history) {
+    if (item.kategori !== 'keluar') continue
+    const day = byDate.get(toInputDate(new Date(item.tanggal)))
+    if (!day) continue
+    day.pendapatan += item.harga * item.jumlah
+    day.transaksi++
+  }
+  return days
 }
 
 export function getTopProductsThisMonth(history: HistoryItem[]) {

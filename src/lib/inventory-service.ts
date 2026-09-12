@@ -24,7 +24,7 @@ type LocalData = {
 
 export type InventoryRepository = {
   mode: 'supabase' | 'demo'
-  getSnapshot: () => Promise<InventorySnapshot>
+  getSnapshot: (onProducts?: (snapshot: InventorySnapshot) => void) => Promise<InventorySnapshot>
   fetchStores: () => Promise<StoreRecord[]>
   setActiveStore: (storeId: string) => Promise<void>
   addStore: (store: StoreInput) => Promise<StoreRecord>
