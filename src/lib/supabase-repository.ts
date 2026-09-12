@@ -2,6 +2,18 @@ import { databaseError, requireSupabase } from '@/lib/supabase'
 import type { InventoryRepository } from '@/lib/inventory-service'
 import type { AuditLog, HistoryItem, Product, ProductInput, StoreInput, StoreRecord, TransactionResult } from '@/lib/types'
 
+const PAGE_SIZE = 1000
+const STORE_COLUMNS = 'id,name,address,address_link,photo,created_at,updated_at'
+const PRODUCT_COLUMNS = 'id,store_id,nama_barang,brand,harga,stok,barcode,created_at,updated_at'
+const HISTORY_COLUMNS = 'id,store_id,product_id,barcode,tanggal,nama_barang,brand,kategori,jumlah,harga,keterangan,oleh,updated_at'
+const AUDIT_COLUMNS = 'id,store_id,actor_id,entity,action,record_id,before_data,after_data,created_at'
+
+const selectColumns = {
+  stores: STORE_COLUMNS,
+  products: PRODUCT_COLUMNS,
+  history: HISTORY_COLUMNS,
+} as const
+
 const names: Record<string, string> = { store_id: 'storeId', product_id: 'productId', actor_id: 'actorId', record_id: 'recordId', before_data: 'beforeData', after_data: 'afterData', nama_barang: 'namaBarang', address_link: 'addressLink', created_at: 'createdAt', updated_at: 'updatedAt' }
 function fromRow<T>(row: Record<string, unknown>): T {
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [names[key] ?? key, value])) as T
@@ -12,17 +24,22 @@ function result(data: { products: Record<string, unknown>[]; history: Record<str
   return { products: data.products.map(fromRow<Product>), history: data.history.map(fromRow<HistoryItem>) }
 }
 
-// Supabase defaults to a row limit. Page explicitly so reports never silently omit rows after 1000.
+// Supabase defaults to a row limit. Page explicitly so reports never silently omit rows.
+// PAGE_SIZE=1000 cuts request count in half compared with the previous 500-row pagination.
 async function readRows(table: 'stores' | 'products' | 'history', storeId?: string) {
   const rows: Record<string, unknown>[] = []
-  for (let offset = 0; ; offset += 500) {
-    let query = requireSupabase().from(table).select('*')
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    let query = requireSupabase().from(table).select(selectColumns[table])
     if (storeId) query = query.eq('store_id', storeId)
-    if (table === 'history') query = query.order('tanggal', { ascending: false })
-    const { data, error } = await query.order('id').range(offset, offset + 499)
+    if (table === 'history') {
+      query = query.order('tanggal', { ascending: false }).order('id')
+    } else {
+      query = query.order('id')
+    }
+    const { data, error } = await query.range(offset, offset + PAGE_SIZE - 1)
     if (error) throw databaseError(error)
     rows.push(...data)
-    if (data.length < 500) return rows
+    if (data.length < PAGE_SIZE) return rows
   }
 }
 async function stores() { return (await readRows('stores')).map(fromRow<StoreRecord>) }
@@ -54,7 +71,7 @@ export const supabaseRepository: InventoryRepository = {
   },
   async setActiveStore(id) { localStorage.setItem('activeStoreId', id) },
   async addStore(store) {
-    const { data, error } = await requireSupabase().from('stores').insert(storeRow(store)).select().single()
+    const { data, error } = await requireSupabase().from('stores').insert(storeRow(store)).select(STORE_COLUMNS).single()
     if (error) throw databaseError(error)
     localStorage.setItem('activeStoreId', data.id)
     return fromRow<StoreRecord>(data)
@@ -68,7 +85,7 @@ export const supabaseRepository: InventoryRepository = {
     if (error) throw databaseError(error)
   },
   async addProduct(product) {
-    const { data, error } = await requireSupabase().from('products').insert(productRow(product)).select().single()
+    const { data, error } = await requireSupabase().from('products').insert(productRow(product)).select(PRODUCT_COLUMNS).single()
     if (error) throw databaseError(error)
     return fromRow<Product>(data)
   },
@@ -105,7 +122,7 @@ export const supabaseRepository: InventoryRepository = {
     return { ...result(data), deletedId: data.deletedId }
   },
   async getAuditLogs(storeId) {
-    const { data, error } = await requireSupabase().from('audit_logs').select('*').eq('store_id', storeId).order('created_at', { ascending: false }).limit(200)
+    const { data, error } = await requireSupabase().from('audit_logs').select(AUDIT_COLUMNS).eq('store_id', storeId).order('created_at', { ascending: false }).limit(200)
     if (error) throw databaseError(error)
     return data.map(fromRow<AuditLog>)
   },
