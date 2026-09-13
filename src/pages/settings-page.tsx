@@ -20,6 +20,18 @@ import { routes } from '@/lib/navigation'
 import { demoEnabled, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
+function getAccountErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  if (typeof error === 'object' && error && 'message' in error) {
+    return String((error as { message?: unknown }).message)
+  }
+
+  return 'Periksa koneksi atau sesi login Anda.'
+}
+
 export function SettingsPage() {
   const [aboutOpen, setAboutOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -117,26 +129,40 @@ export function SettingsPage() {
       return
     }
 
-    const updates: { email?: string; password?: string } = {}
-    if (nextEmail !== currentEmail) updates.email = nextEmail
-    if (accountPassword) updates.password = accountPassword
-
-    if (!Object.keys(updates).length) {
-      setAccountNotice('Tidak ada perubahan akun yang perlu disimpan.')
-      return
-    }
-
     setAccountSaving(true)
     try {
-      const { error } = await supabase.auth.updateUser(updates)
+      await supabase.auth.refreshSession().catch(() => null)
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+
+      const latestEmail = userData.user?.email ?? currentEmail
+      if (latestEmail && latestEmail !== currentEmail) {
+        setCurrentEmail(latestEmail)
+      }
+
+      const updates: { email?: string; password?: string } = {}
+      if (nextEmail !== latestEmail) updates.email = nextEmail
+      if (accountPassword) updates.password = accountPassword
+
+      if (!Object.keys(updates).length) {
+        setAccountNotice('Tidak ada perubahan akun yang perlu disimpan.')
+        return
+      }
+
+      const { data, error } = await supabase.auth.updateUser(updates, {
+        emailRedirectTo: `${window.location.origin}${routes.settings}`,
+      })
       if (error) throw error
-      setCurrentEmail(nextEmail)
+
+      const savedEmail = data.user?.email ?? nextEmail
+      setCurrentEmail(savedEmail)
+      setAccountEmail(savedEmail)
       setAccountPassword('')
       setAccountConfirm('')
       setAccountNotice(updates.email ? 'Akun diperbarui. Jika Supabase meminta konfirmasi email, cek inbox email lama dan baru.' : 'Password berhasil diperbarui.')
       showToast('Pengaturan akun diperbarui', 'success')
-    } catch {
-      setAccountError('Pengaturan akun gagal disimpan. Periksa koneksi atau sesi login Anda.')
+    } catch (error) {
+      setAccountError(`Pengaturan akun gagal disimpan. ${getAccountErrorMessage(error)}`)
     } finally {
       setAccountSaving(false)
     }

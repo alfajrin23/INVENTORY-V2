@@ -478,6 +478,16 @@ test('scanner fallback, missing barcode, cart, receipt PDF and print',async ({pa
   await page.setViewportSize({width:320,height:800});await page.goto('/')
   await page.getByRole('button',{name:'Buka scanner',exact:true}).click()
   await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByRole('button',{name:'Tutup scanner'})).toHaveCount(1)
+  await expect(page.locator('.scanner-target-frame')).toBeVisible()
+  await expect.poll(() => page.locator('.scanner-target-frame').evaluate((frame) => {
+    const frameBox = frame.getBoundingClientRect()
+    const cameraBox = frame.closest('[data-scanner-camera]')?.getBoundingClientRect()
+    if (!cameraBox) return false
+    const centerOffsetX = Math.abs((frameBox.left + frameBox.width / 2) - (cameraBox.left + cameraBox.width / 2))
+    const centerOffsetY = Math.abs((frameBox.top + frameBox.height / 2) - (cameraBox.top + cameraBox.height / 2))
+    return centerOffsetX < 2 && centerOffsetY < 2 && frameBox.width <= cameraBox.width - 24 && frameBox.height <= cameraBox.height - 24
+  })).toBe(true)
   await page.getByLabel('Input barcode manual').fill('missing')
   await page.getByRole('button',{name:'Cari barcode'}).click()
   await expect(page.getByText('Barcode tidak ditemukan')).toBeVisible()

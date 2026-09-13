@@ -371,6 +371,40 @@ main, section, [data-glass-panel], [data-slot="dialog-content"] { min-width: 0; 
 [data-slot="dialog-footer"] { flex-wrap: wrap; }
 .voice-sheet { max-height: 90dvh; }
 .scanner-camera video { background: #000; object-fit: contain; }
+.scanner-viewport,
+.scanner-viewport > div,
+.scanner-viewport video,
+.scanner-viewport canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.scanner-viewport video,
+.scanner-viewport canvas {
+  background: #000 !important;
+  object-fit: contain !important;
+}
+.scanner-target-frame {
+  width: min(84vw, 34rem);
+  height: min(38vw, 14rem);
+}
+.scanner-target-frame::before,
+.scanner-target-frame::after {
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.26), transparent);
+}
+.scanner-target-frame::before { top: 34%; }
+.scanner-target-frame::after { bottom: 34%; }
+.scanner-target-frame .scanner-scanline {
+  animation: scanner-line-sweep 2.2s ease-in-out infinite;
+}
+.scanner-close-button {
+  top: max(1rem, env(safe-area-inset-top));
+  right: max(1rem, env(safe-area-inset-right));
+}
 html.light [data-slot="dialog-content"] {
   color-scheme: dark;
   --background: #172033; --foreground: #f1f5f9; --input: #334155;
@@ -380,6 +414,17 @@ html.light [data-slot="dialog-content"] {
 }
 .voice-pulse { animation: voice-pulse 1.2s ease-in-out infinite; }
 @keyframes voice-pulse { 50% { opacity: .45; transform: scale(1.1); } }
+@keyframes scanner-line-sweep {
+  0%,
+  100% {
+    opacity: .92;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: .45;
+    transform: translateY(calc(var(--scanner-frame-height, 140px) - 6px));
+  }
+}
 @media (max-width: 1023px) {
   header { padding-top: max(.75rem, env(safe-area-inset-top)); }
   main { padding: 1rem .875rem calc(8rem + env(safe-area-inset-bottom)); }
@@ -430,9 +475,17 @@ html.light [data-slot="dialog-content"] {
     height: auto !important;
     min-height: 0 !important;
   }
+  .scanner-viewport,
+  .scanner-viewport > div,
+  .scanner-viewport video,
+  .scanner-viewport canvas,
   .scanner-camera video {
     width: 100% !important;
     height: 100% !important;
+  }
+  .scanner-viewport video,
+  .scanner-viewport canvas,
+  .scanner-camera video {
     object-fit: contain !important;
     background: #000 !important;
   }

@@ -117,6 +117,48 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
   } finally {await db.close()}
 })
 
+test('account settings shows Supabase email update detail', async ({ page }) => {
+  const uid = '00000000-0000-4000-8000-000000000001'
+  const store = '00000000-0000-4000-8000-000000000010'
+  const token = [{ alg: 'HS256', typ: 'JWT' }, { sub: uid, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }, 'signature']
+    .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.')
+  const user = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'owner@example.test', created_at: new Date().toISOString(), app_metadata: {}, user_metadata: {} }
+  const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'content-type': 'application/json' }
+
+  await page.route('http://127.0.0.1:54321/**', async route => {
+    const url = new URL(route.request().url())
+    const method = route.request().method()
+    if (method === 'OPTIONS') { await route.fulfill({ status: 200, headers, body: '' }); return }
+    if (url.pathname === '/auth/v1/token') { await route.fulfill({ headers, json: { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } }); return }
+    if (url.pathname === '/auth/v1/user') {
+      if (method === 'PUT') {
+        await route.fulfill({ status: 400, headers, json: { message: 'Email sudah digunakan akun lain.' } })
+        return
+      }
+      await route.fulfill({ headers, json: user })
+      return
+    }
+    if (url.pathname === '/rest/v1/stores') { await route.fulfill({ headers, json: [{ id: store, owner_id: uid, name: 'Toko Akun', address: '', address_link: '', created_at: new Date().toISOString() }] }); return }
+    if (url.pathname === '/rest/v1/products' || url.pathname === '/rest/v1/history' || url.pathname === '/rest/v1/audit_logs') {
+      await route.fulfill({ headers, json: [] })
+      return
+    }
+    await route.fulfill({ status: 400, headers, json: { message: 'Unexpected request' } })
+  })
+
+  await page.goto('/')
+  await page.getByLabel('Email', { exact: true }).fill('owner@example.test')
+  await page.getByLabel('Password', { exact: true }).fill('test-password')
+  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await expect(page.getByText('Toko Akun').first()).toBeVisible()
+  await page.goto('/pengaturan.html')
+  await page.getByRole('button', { name: 'Pengaturan Akun' }).click()
+  await expect(page.getByLabel('Email Login')).toHaveValue('owner@example.test')
+  await page.getByLabel('Email Login').fill('admin@dipakai.test')
+  await page.getByRole('button', { name: 'Simpan Akun' }).click()
+  await expect(page.getByRole('alert')).toContainText('Email sudah digunakan akun lain.')
+})
+
 test('product data appears while transaction history is still loading', async ({ page }) => {
   const uid = '00000000-0000-4000-8000-000000000001'
   const store = '00000000-0000-4000-8000-000000000010'

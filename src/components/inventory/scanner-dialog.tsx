@@ -1,5 +1,5 @@
 import { Barcode, Camera, PackageSearch, Plus, Search, X } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import type { Html5Qrcode as Html5QrcodeInstance } from 'html5-qrcode'
 
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,25 @@ type ScannerDialogProps = {
   description?: string
 }
 
+type ScannerFrameSize = {
+  width: number
+  height: number
+}
+
+function barcodeFrameSize(width: number, height: number): ScannerFrameSize {
+  const safeWidth = Math.max(1, width - 48)
+  const safeHeight = Math.max(1, height - 72)
+  const frameWidth = Math.min(Math.max(230, Math.floor(width * 0.84)), safeWidth)
+  const frameHeight = Math.min(
+    Math.max(112, Math.floor(frameWidth * 0.46)),
+    Math.floor(height * 0.38),
+    safeHeight,
+    230,
+  )
+
+  return { width: frameWidth, height: frameHeight }
+}
+
 export function ScannerDialog({
   open,
   onOpenChange,
@@ -47,12 +66,14 @@ export function ScannerDialog({
     return `barcode-scanner-${token}`
   })
   const scannerRef = useRef<Html5QrcodeInstance | null>(null)
+  const cameraAreaRef = useRef<HTMLDivElement | null>(null)
   const resolverRef = useRef<(barcode: string) => void>(() => {})
   const handledBarcodeRef = useRef('')
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'active' | 'error'>('idle')
   const [manualBarcode, setManualBarcode] = useState('')
   const [search, setSearch] = useState('')
   const [missingBarcode, setMissingBarcode] = useState('')
+  const [frameSize, setFrameSize] = useState<ScannerFrameSize | null>(null)
   const debouncedSearch = useDebouncedValue(search, 220)
 
   const suggestions = useMemo(() => {
@@ -86,6 +107,33 @@ export function ScannerDialog({
   }, [onDetected, onRawBarcode, products])
 
   useEffect(() => { resolverRef.current = resolveBarcode }, [resolveBarcode])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const cameraArea = cameraAreaRef.current
+    if (!cameraArea) {
+      return
+    }
+
+    const updateFrameSize = () => {
+      const rect = cameraArea.getBoundingClientRect()
+      setFrameSize(barcodeFrameSize(rect.width, rect.height))
+    }
+
+    updateFrameSize()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateFrameSize)
+      return () => window.removeEventListener('resize', updateFrameSize)
+    }
+
+    const observer = new ResizeObserver(updateFrameSize)
+    observer.observe(cameraArea)
+
+    return () => observer.disconnect()
+  }, [open])
 
   useEffect(() => {
     if (!open) {
@@ -126,12 +174,7 @@ export function ScannerDialog({
           {
             fps: 10,
             qrbox: (width, height) => {
-              const maxWidth = Math.max(1, width - 24)
-              const maxHeight = Math.max(1, height - 24)
-              return {
-                width: Math.min(Math.max(220, Math.floor(width * 0.86)), maxWidth),
-                height: Math.min(Math.max(120, Math.floor(height * 0.32)), maxHeight, 240),
-              }
+              return barcodeFrameSize(width, height)
             },
           },
           (decodedText) => {
@@ -171,14 +214,23 @@ export function ScannerDialog({
     resolveBarcode(manualBarcode)
   }
 
+  const frameStyle = {
+    width: frameSize ? `${frameSize.width}px` : undefined,
+    height: frameSize ? `${frameSize.height}px` : undefined,
+    '--scanner-frame-height': frameSize ? `${frameSize.height}px` : '140px',
+  } as CSSProperties
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="scanner-sheet max-h-[92dvh] overflow-y-auto border-white/12 bg-[#111827]/95 p-0 text-white shadow-2xl sm:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1.2fr)_24rem] max-lg:inset-0 max-lg:h-dvh max-lg:max-h-dvh max-lg:w-dvw max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-none max-lg:overflow-hidden max-lg:grid max-lg:grid-rows-[minmax(0,1fr)_auto]">
-        <div data-scanner-camera className="scanner-camera relative h-[58dvh] min-h-[360px] overflow-hidden bg-black lg:h-auto lg:min-h-[560px]">
-          <div id={scannerId} className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-contain [&_video]:bg-black" />
+      <DialogContent showCloseButton={false} className="scanner-sheet max-h-[92dvh] overflow-y-auto border-white/12 bg-[#111827]/95 p-0 text-white shadow-2xl sm:max-w-5xl lg:grid lg:grid-cols-[minmax(0,1.2fr)_24rem] max-lg:inset-0 max-lg:h-dvh max-lg:max-h-dvh max-lg:w-dvw max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-none max-lg:overflow-hidden max-lg:grid max-lg:grid-rows-[minmax(0,1fr)_auto]">
+        <div ref={cameraAreaRef} data-scanner-camera className="scanner-camera relative h-[58dvh] min-h-[360px] overflow-hidden bg-black lg:h-auto lg:min-h-[560px]">
+          <div id={scannerId} className="scanner-viewport absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-contain [&_video]:bg-black" />
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.65),transparent_18%,transparent_82%,rgba(0,0,0,0.65))]" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-40 max-h-[38%] w-[86%] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-cyan-300/70 shadow-[0_0_42px_rgba(0,210,255,0.22)]">
-            <div className="absolute inset-x-4 top-0 h-1 rounded-full bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.9)] animate-[scanline_2s_linear_infinite]" />
+          <div
+            className="scanner-target-frame pointer-events-none absolute left-1/2 top-1/2 max-h-[38%] max-w-[calc(100%_-_3rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-cyan-300/70 shadow-[0_0_42px_rgba(0,210,255,0.22)]"
+            style={frameStyle}
+          >
+            <div className="scanner-scanline absolute inset-x-4 top-0 h-1 rounded-full bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.9)]" />
           </div>
           <div className="absolute left-4 top-4 flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1.5 text-xs text-white backdrop-blur-xl">
             <Camera className="size-3.5" />
@@ -189,7 +241,7 @@ export function ScannerDialog({
             variant="ghost"
             size="icon-lg"
             aria-label="Tutup scanner" onClick={() => onOpenChange(false)}
-            className="absolute right-4 top-4 rounded-full bg-black/35 text-white hover:bg-white/15"
+            className="scanner-close-button absolute rounded-full bg-black/35 text-white hover:bg-white/15"
           >
             <X className="size-5" />
           </Button>
