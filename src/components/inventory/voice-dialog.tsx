@@ -54,6 +54,11 @@ function numericValue(value: string) {
   return Number.isSafeInteger(number) ? number : null
 }
 
+function voiceProductLabel(product: Product | undefined, fallback: string) {
+  if (!product) return fallback
+  return [product.namaBarang, product.brand].filter(Boolean).join(' ')
+}
+
 function canAutoSelect(matches: ReturnType<typeof matchVoiceProducts>) {
   return matches[0]?.score >= 0.98 && (!matches[1] || matches[0].score - matches[1].score >= 0.2)
 }
@@ -296,7 +301,9 @@ export function VoiceDialog({
   for (const item of resolved) if (item.product) totals.set(item.product.id, (totals.get(item.product.id) ?? 0) + item.quantity)
   const insufficient = transactionCommand?.category === 'keluar' && resolved.some(i => i.product && (totals.get(i.product.id) ?? 0) > i.product.stok)
   const canConfirm = resolved.length > 0 && resolved.every(i => i.product) && !insufficient
-  const exampleTranscript = products[0] ? `transaksi ${products[0].namaBarang} ${products[0].brand} dua` : 'transaksi lampu Philips dua'
+  const primaryVoiceProduct = voiceProductLabel(products[0], 'Charger Samsung 25W')
+  const secondaryVoiceProduct = voiceProductLabel(products[1], 'Lampu LED 12W')
+  const exampleTranscript = `transaksi ${primaryVoiceProduct} dua`
   const hasTranscript = transcript.trim().length > 0
   const draftBarcode = createDraft?.barcode.trim() ?? ''
   const validCreate = Boolean(createDraft?.name.trim() && draftBarcode && activeStoreId && onCreateProduct
@@ -304,6 +311,32 @@ export function VoiceDialog({
     && (createDraft.price === null || (Number.isFinite(createDraft.price) && createDraft.price >= 0)))
   const duplicateBarcode = Boolean(draftBarcode && products.some(product => product.storeId === activeStoreId && product.barcode === draftBarcode))
   const locked = state === 'saving' || state === 'success'
+  const voiceGuideItems = [
+    {
+      title: 'Barang keluar',
+      description: 'Untuk penjualan atau pengurangan stok.',
+      keywords: ['transaksi', 'jual', 'barang keluar', 'keluar'],
+      examples: [`transaksi ${primaryVoiceProduct} dua`, `jual ${primaryVoiceProduct} 1 dan ${secondaryVoiceProduct} 3`],
+    },
+    {
+      title: 'Barang masuk',
+      description: 'Untuk restok atau penambahan persediaan.',
+      keywords: ['barang masuk', 'stok masuk', 'restok', 'tambah stok'],
+      examples: [`barang masuk ${primaryVoiceProduct} sepuluh`, `restok ${secondaryVoiceProduct} 5`],
+    },
+    {
+      title: 'Tambah barang',
+      description: 'Sebutkan label data barang supaya draft lebih rapi.',
+      keywords: ['tambah barang', 'produk baru', 'nama', 'merek', 'stok', 'harga', 'barcode'],
+      examples: ['tambah barang nama Kabel HDMI merek Vivan stok 12 harga 35000 barcode 899123'],
+    },
+    {
+      title: 'Koreksi draft',
+      description: 'Dipakai setelah aplikasi menampilkan hasil pemahaman.',
+      keywords: ['jumlah', 'qty', 'bukan', 'ganti ke', 'batal', 'ulang'],
+      examples: [`jumlah ${primaryVoiceProduct} tiga`, `bukan ${secondaryVoiceProduct} maksudnya ${primaryVoiceProduct}`],
+    },
+  ]
 
   return <Dialog open onOpenChange={open => { if (!open && !busy.current) onClose() }}>
     <DialogContent className="voice-sheet box-border max-h-[90dvh] overflow-y-auto border-white/12 bg-[#121827] text-white shadow-2xl sm:max-w-lg max-lg:inset-x-0 max-lg:bottom-0 max-lg:top-auto max-lg:w-dvw max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl" showCloseButton={state !== 'saving'}>
@@ -312,6 +345,31 @@ export function VoiceDialog({
         <DialogDescription>Ucapkan transaksi, koreksi, atau tambah barang baru. Stok berubah setelah konfirmasi.</DialogDescription>
       </DialogHeader>
       <div className={`voice-visual voice-visual-${state}`}><button type="button" aria-label={state === 'listening' ? 'Selesai bicara' : 'Mulai dengarkan'} disabled={locked || state === 'permission' || state === 'processing'} onClick={state === 'listening' ? finishAudio : start}><Mic size={27} /></button><strong>{state === 'listening' ? 'Saya mendengarkan' : state === 'review' ? 'Periksa transaksi' : state === 'success' ? 'Selesai' : 'Siap untuk transaksi?'}</strong><span>{state === 'listening' ? 'Ucapkan perintah dengan jelas.' : 'Katakan barang masuk atau keluar beserta jumlahnya.'}</span>{state === 'listening' && <div className="voice-wave" aria-hidden="true">{Array.from({ length: 15 }, (_, index) => <i key={index} style={{ animationDelay: `${index * 70}ms` }} />)}</div>}</div>
+      <section className="rounded-2xl border border-white/10 bg-white/[0.06] p-4" aria-labelledby="voice-guide-title">
+        <div className="flex items-start gap-3">
+          <Lightbulb className="mt-0.5 size-5 shrink-0 text-amber-200" />
+          <div>
+            <h2 id="voice-guide-title" className="text-base font-semibold text-white">Panduan cepat perintah suara</h2>
+            <p className="mt-1 text-sm text-white/65">Mulai dengan kata kunci, sebutkan nama barang, lalu jumlah. Untuk beberapa barang, sambungkan dengan "dan", "lalu", atau "terus".</p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3">
+          {voiceGuideItems.map(item => (
+            <article key={item.title} className="rounded-xl border border-white/10 bg-black/15 p-3">
+              <div className="flex flex-col gap-1">
+                <h3 className="text-sm font-semibold text-white">{item.title}</h3>
+                <p className="text-xs text-white/60">{item.description}</p>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Kata kunci ${item.title}`}>
+                {item.keywords.map(keyword => <span key={keyword} className="rounded-full border border-emerald-200/20 bg-emerald-300/10 px-2 py-1 text-[11px] font-semibold text-emerald-100">{keyword}</span>)}
+              </div>
+              <div className="mt-3 grid gap-2">
+                {item.examples.map(example => <p key={example} className="rounded-lg bg-white/[0.08] px-3 py-2 text-sm text-white/85">"{example}"</p>)}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
       <p role="status" aria-live="polite" className="font-semibold text-emerald-200">{labels[state]}</p>
       <Label htmlFor="voice-transcript">Perintah Anda</Label>
       <Textarea id="voice-transcript" value={transcript} disabled={locked || state === 'listening' || state === 'permission'} placeholder={exampleTranscript} onChange={e => { setTranscript(e.target.value); setError(''); if (state === 'error') setState('idle') }} />
