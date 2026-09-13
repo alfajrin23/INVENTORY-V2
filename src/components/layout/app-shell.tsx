@@ -4,10 +4,9 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import {
   Bell,
   ChevronDown,
-  MapPin,
   Moon,
   Mic,
-  Power,
+  MessageCircle,
   ScanLine,
   Search,
   Settings,
@@ -192,7 +191,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="min-h-screen text-white">
+    <div className="app-frame min-h-screen text-white">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-white/10 bg-[#0f1725]/78 p-4 shadow-2xl backdrop-blur-2xl lg:flex">
         <button
           type="button"
@@ -243,7 +242,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 border-b border-white/10 bg-[#101827]/75 px-4 py-3 backdrop-blur-2xl lg:fixed lg:left-72 lg:right-0">
+      <header className="app-header sticky top-0 z-30 border-b border-white/10 bg-[#101827]/75 px-4 py-3 backdrop-blur-2xl lg:fixed lg:left-72 lg:right-0">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -257,15 +256,10 @@ export function AppShell() {
           </button>
 
           <div className="min-w-0 flex-1 lg:hidden">
-            <p className="truncate text-sm font-semibold">{activeStore?.name ?? 'ABElektronik'}</p>
-            <button
-              type="button"
-              onClick={() => activeStore?.addressLink && window.open(activeStore.addressLink, '_blank')}
-              className="flex max-w-full items-center gap-1 truncate text-xs text-white/52"
-            >
-              <MapPin className="size-3" />
-              <span className="truncate">{activeStore?.address ?? 'Alamat toko'}</span>
+            <button type="button" onClick={() => navigate(routes.profile)} className="flex max-w-full items-center gap-1 text-left text-sm font-semibold">
+              <span className="truncate">{activeStore?.name ?? 'ABElektronik'}</span><ChevronDown className="size-3.5 shrink-0" />
             </button>
+            <p className="truncate text-xs text-white/52">{activeStore?.address?.split(',')[0] ?? 'Toko aktif'} · Toko aktif</p>
           </div>
 
           <div className="relative hidden flex-1 lg:block">
@@ -345,7 +339,7 @@ export function AppShell() {
             {notificationIssue && <span className="absolute right-1 top-1 size-1.5 rounded-full bg-rose-400" />}
           </Button>
 
-          <Button aria-label="Buka scanner" variant="outline" size="icon-lg" onClick={() => setScanOpen(true)} className="lg:hidden"><ScanLine /></Button>
+          <Button aria-label="Buka scanner" variant="outline" size="icon-lg" onClick={() => setScanOpen(true)} className="hidden"><ScanLine /></Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -369,15 +363,15 @@ export function AppShell() {
             variant="outline"
             size="icon-lg"
             aria-label="Ringkasan WhatsApp" onClick={handleShutdown}
-            className="border-rose-300/25 bg-rose-400/10 text-rose-100 hover:bg-rose-400/18"
+            className="hidden border-rose-300/25 bg-rose-400/10 text-rose-100 hover:bg-rose-400/18 lg:inline-flex"
           >
-            <Power className="size-4" />
+            <MessageCircle className="size-4" />
           </Button>
         </div>
       </header>
 
       <Button aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)} className="fixed bottom-7 right-36 z-40 hidden h-[52px] bg-teal-700 text-white lg:inline-flex"><Mic />Voice AI</Button>
-      <main className="px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
+      <main className="app-main px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={location.pathname}
@@ -386,7 +380,7 @@ export function AppShell() {
             exit={reduceMotion ? undefined : { opacity: 0, y: -4, scale: 0.998 }}
             transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
           >
-            <Outlet />
+            <Outlet context={{ openScanner: () => setScanOpen(true), openVoice: () => setVoiceOpen(true), openWhatsApp: handleShutdown }} />
           </motion.div>
         </AnimatePresence>
       </main>
@@ -398,9 +392,9 @@ export function AppShell() {
         <button
           type="button"
           aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)}
-          className="-mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition-[transform,box-shadow] duration-200 hover:scale-[1.03] hover:shadow-[0_20px_50px_rgba(13,148,136,0.38)] active:scale-95"
+          className="nav-voice -mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition-[transform,box-shadow] duration-200 hover:scale-[1.03] active:scale-95"
         >
-          <Mic className="size-7" />
+          <Mic className="size-5" />
         </button>
         {mobileNavigation.slice(2).map((item) => (
           <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />

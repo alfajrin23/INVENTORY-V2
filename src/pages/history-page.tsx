@@ -1,5 +1,6 @@
 import { ArrowDownCircle, ArrowUpCircle, CalendarDays, ChevronLeft, ChevronRight, Filter, Plus, Save, ScanLine, Search, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
 import { TransactionActions, TransactionRevisionDialog, type RevisionAction } from '@/components/inventory/transaction-revision-dialog'
@@ -31,6 +32,8 @@ type CategoryFilter = 'semua' | TransactionCategory
 const HISTORY_PER_PAGE = 40
 
 export function HistoryPage() {
+  const [searchParams] = useSearchParams()
+  const handledAction = useRef('')
   const { products, history, loading, error, refresh, processTransaction } = useInventory()
   const { showToast } = useToast()
   const desktop = useMediaQuery('(min-width: 1024px)')
@@ -96,6 +99,19 @@ export function HistoryPage() {
     setBarcode(product.barcode)
   }
 
+  useEffect(() => {
+    const action = searchParams.get('action')
+    if (action !== 'masuk' && action !== 'keluar') return
+    const productId = searchParams.get('product')
+    if (productId && !products.length) return
+    const actionKey = `${action}:${productId ?? ''}`
+    if (handledAction.current === actionKey) return
+    handledAction.current = actionKey
+    openTransactionForm(action)
+    const product = products.find(item => item.id === productId)
+    if (product) chooseProduct(product)
+  }, [products, searchParams])
+
   const handleBarcodeChange = (value: string) => {
     setBarcode(value)
     const product = products.find((item) => item.barcode === value.trim())
@@ -148,8 +164,9 @@ export function HistoryPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="history-page space-y-5">
+      <div className="mobile-history-heading lg:hidden"><div className="mobile-page-heading"><div><h1>History</h1><p>Semua pergerakan, satu tempat.</p></div><button type="button" aria-label="Tambah transaksi" onClick={() => openTransactionForm('masuk')}><Plus size={20} /></button></div><div className="mobile-filter-row" role="group" aria-label="Filter history">{([['semua', 'Semua'], ['masuk', 'Masuk'], ['keluar', 'Keluar']] as const).map(([value, label]) => <button key={value} className={categoryFilter === value ? 'selected' : ''} aria-pressed={categoryFilter === value} onClick={() => setCategoryFilter(value)}>{label}</button>)}</div><p className="mobile-section-eyebrow">TERBARU · {filteredHistory.length} TRANSAKSI</p></div>
+      <div className="hidden flex-col gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm text-cyan-100/70">Mutasi Stok</p>
           <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">History Barang</h1>
@@ -166,7 +183,7 @@ export function HistoryPage() {
         </div>
       </div>
 
-      <GlassPanel className="p-4" glow="cyan">
+      <GlassPanel className="hidden p-4 lg:block" glow="cyan">
         <div className="grid gap-3 lg:grid-cols-[1fr_16rem]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/42" />
@@ -191,7 +208,7 @@ export function HistoryPage() {
         </div>
       </GlassPanel>
 
-      <GlassPanel className="overflow-hidden p-0" glow="emerald">
+      <GlassPanel className="history-list-panel overflow-hidden p-0" glow="emerald">
         {loading && !history.length ? (
           <div className="p-5">
             <TableSkeleton rows={8} />
@@ -237,30 +254,9 @@ export function HistoryPage() {
                 </Table>
               </div>
             ) : (
-              <div className="space-y-3 p-4">
+              <div className="mobile-history-list space-y-3 p-0">
                 {visibleHistory.map((item) => (
-                  <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.055] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-white">{item.namaBarang}</p>
-                        <p className="text-sm text-white/52">{item.brand} · Qty {item.jumlah}</p>
-                      </div>
-                      <Badge className={item.kategori === 'keluar' ? 'bg-rose-300/14 text-rose-100' : 'bg-emerald-300/14 text-emerald-100'}>
-                        {item.kategori}
-                      </Badge>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="text-white/42">Tanggal</p>
-                        <p className="text-white/78">{dateTimeLabel(item.tanggal)}</p>
-                      </div>
-                      <div>
-                        <p className="text-white/42">Nilai</p>
-                        <p className="font-mono text-white">{formatCurrency(item.harga * item.jumlah)}</p>
-                      </div>
-                    </div>
-                    <TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} />
-                  </div>
+                  <div key={item.id} className="mobile-history-row"><span className={`activity-icon ${item.kategori}`}>{item.kategori === 'keluar' ? <ArrowUpCircle /> : <ArrowDownCircle />}</span><div className="history-row-copy"><strong>{item.namaBarang}</strong><small>{item.kategori === 'keluar' ? 'Keluar' : 'Masuk'} · {dateTimeLabel(item.tanggal)} · {item.oleh || 'Kasir'}</small><TransactionActions item={item} onAction={(selected, action) => setRevision({ item: selected, action })} /></div><div className="activity-value"><strong>{formatCurrency(item.harga * item.jumlah)}</strong><small>{item.kategori === 'keluar' ? '−' : '+'}{item.jumlah} unit</small></div></div>
                 ))}
               </div>
             )}

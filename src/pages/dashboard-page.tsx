@@ -7,9 +7,16 @@ import {
   ReceiptText,
   TrendingUp,
   WalletCards,
+  PackagePlus,
+  PackageMinus,
+  ScanLine,
+  Plus,
+  Box,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
+import { Link, useNavigate, useOutletContext } from 'react-router-dom'
+import { useMemo, useState } from 'react'
 import {
   Bar,
   BarChart,
@@ -31,6 +38,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useInventory } from '@/hooks/use-inventory'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { getDailyRevenueSeries, getDashboardMetrics, getTopProductsThisMonth } from '@/lib/analytics'
 import { dateTimeLabel, formatCurrency, formatNumber } from '@/lib/format'
 import { routes } from '@/lib/navigation'
@@ -40,6 +48,10 @@ const chartGridColor = 'rgba(49,95,99,0.14)'
 
 export function DashboardPage() {
   const { products, history, loading, productsReady, error, refresh } = useInventory()
+  const desktop = useMediaQuery('(min-width: 1024px)')
+  const navigate = useNavigate()
+  const { openScanner } = useOutletContext<{ openScanner: () => void }>()
+  const [selectedDay, setSelectedDay] = useState(6)
   const metrics = useMemo(() => getDashboardMetrics(products, history), [products, history])
   const dailyRevenue = useMemo(() => getDailyRevenueSeries(history), [history])
   const topProducts = useMemo(() => getTopProductsThisMonth(history), [history])
@@ -51,6 +63,46 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {!desktop && <div className="mobile-dashboard lg:hidden">
+        <div className="mobile-page-heading">
+          <div><h1>Ringkasan toko</h1><p>{new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</p></div>
+          <span className="mobile-date-badge">Hari ini</span>
+        </div>
+        {loading && !productsReady ? <LoadingGrid rows={3} /> : <>
+          <section className="revenue-hero" aria-label="Pendapatan hari ini">
+            <span>Pendapatan hari ini</span>
+            <strong>{metrics.todayRevenueLabel}</strong>
+            <div><span className="hero-trend"><TrendingUp size={14} /> {metrics.revenueTrend.toFixed(1)}%</span><span>dibanding kemarin</span></div>
+          </section>
+          <section className="mobile-metrics" aria-label="Metrik toko">
+            <button onClick={() => navigate(routes.products)}><Package size={16} /><span>Produk</span><strong>{formatNumber(metrics.totalProducts)}</strong></button>
+            <button onClick={() => navigate(routes.history)}><ReceiptText size={16} /><span>Transaksi keluar</span><strong>{formatNumber(metrics.todayTransactions)}</strong></button>
+            <button className="warning" onClick={() => navigate(`${routes.products}?stock=low`)}><AlertTriangle size={16} /><span>Stok rendah</span><strong>{formatNumber(metrics.lowStockCount)}</strong></button>
+          </section>
+          <section className="mobile-quick-actions" aria-label="Aksi cepat">
+            <button onClick={() => navigate(`${routes.history}?action=masuk`)}><span className="action-icon incoming"><PackagePlus /></span><span>Masuk</span></button>
+            <button onClick={() => navigate(`${routes.history}?action=keluar`)}><span className="action-icon outgoing"><PackageMinus /></span><span>Keluar</span></button>
+            <button onClick={openScanner}><span className="action-icon scan"><ScanLine /></span><span>Scan</span></button>
+            <button onClick={() => navigate(`${routes.products}?create=1`)}><span className="action-icon add"><Plus /></span><span>Tambah</span></button>
+          </section>
+          <section className="mobile-chart-card">
+            <div className="section-heading"><h2>Pendapatan 7 hari</h2><Link to={routes.revenueDay}>Detail <ArrowUpRight size={15} /></Link></div>
+            <strong className="chart-total">{formatCurrency(dailyRevenue.reduce((total, day) => total + day.pendapatan, 0))}</strong>
+            <p className="chart-period">7 hari terakhir · transaksi keluar</p>
+            <div className="mobile-chart" role="group" aria-label="Pilih hari pendapatan">
+              {dailyRevenue.map((day, index) => <button key={day.tanggal} className={selectedDay === index ? 'selected' : ''} onClick={() => setSelectedDay(index)} aria-label={`${day.hari}, ${day.tanggal}: ${formatCurrency(day.pendapatan)}`} aria-pressed={selectedDay === index}><span className="bar-track"><span style={{ height: `${Math.max(8, day.pendapatan / Math.max(...dailyRevenue.map(point => point.pendapatan), 1) * 100)}%` }} /></span><span>{day.hari.slice(0, 3)}</span></button>)}
+            </div>
+            <div className="chart-selection"><span>{dailyRevenue[selectedDay]?.tanggal}</span><strong>{formatCurrency(dailyRevenue[selectedDay]?.pendapatan ?? 0)}</strong></div>
+          </section>
+          <section className="mobile-activity"><div className="section-heading"><h2>Aktivitas terbaru</h2><Link to={routes.history}>Semua <ArrowRight size={15} /></Link></div>
+            {recentHistory.length ? recentHistory.slice(0, 3).map(item => <Link to={routes.history} className="activity-row" key={item.id}><span className={`activity-icon ${item.kategori}`}>{item.kategori === 'keluar' ? <ArrowUpRight /> : <ArrowDownLeft />}</span><span className="activity-copy"><strong>{item.namaBarang}</strong><small>{item.kategori === 'keluar' ? 'Keluar' : 'Masuk'} · {dateTimeLabel(item.tanggal)} · {item.oleh || 'Kasir'}</small></span><span className="activity-value"><strong>{formatCurrency(item.harga * item.jumlah)}</strong><small>{item.kategori === 'keluar' ? '−' : '+'}{item.jumlah} unit</small></span></Link>) : <EmptyState title="Belum ada aktivitas" description="Transaksi masuk dan keluar akan muncul di sini." />}
+          </section>
+          <section className="mobile-top-products"><div className="section-heading"><h2>Terlaris bulan ini</h2><span>Unit terjual</span></div>
+            {topProducts.length ? topProducts.slice(0, 3).map((product, index) => <div className="top-product-row" key={`${product.brand}-${product.namaBarang}`}><span>{String(index + 1).padStart(2, '0')}</span><div><strong>{product.namaBarang}</strong><i style={{ width: `${Math.max(12, product.jumlah / (topProducts[0]?.jumlah || 1) * 100)}%` }} /></div><strong>{product.jumlah}</strong></div>) : <p className="mobile-empty-copy"><Box size={18} /> Produk terlaris muncul setelah ada penjualan.</p>}
+          </section>
+        </>}
+      </div>}
+      {desktop && <div className="hidden space-y-6 lg:block">
       <section className="dashboard-metrics grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {loading && !productsReady ? (
           <LoadingGrid rows={4} className="md:col-span-2 xl:col-span-4 xl:grid-cols-4" />
@@ -271,6 +323,7 @@ export function DashboardPage() {
           </div>
         </GlassPanel>
       </section>
+      </div>}
     </div>
   )
 }

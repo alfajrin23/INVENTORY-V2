@@ -1,6 +1,6 @@
-import { History, Info, LogOut, Moon, Save, ScrollText, ShieldCheck, Store, Sun, UserCog, X } from 'lucide-react'
+import { ChevronRight, Database, History, Info, LogOut, MessageCircle, Moon, Save, ScrollText, ShieldCheck, Store, Sun, UserCog, X, Bell } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useThemeMode } from '@/hooks/use-theme-mode'
+import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
 import { demoEnabled, supabase } from '@/lib/supabase'
@@ -33,6 +34,8 @@ function getAccountErrorMessage(error: unknown) {
 }
 
 export function SettingsPage() {
+  const { activeStore, mode } = useInventory()
+  const { openWhatsApp } = useOutletContext<{ openWhatsApp: () => void }>()
   const [aboutOpen, setAboutOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [accountEmail, setAccountEmail] = useState('')
@@ -170,7 +173,8 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      <div>
+      <div className="mobile-settings lg:hidden"><div className="mobile-page-heading"><div><h1>Pengaturan</h1><p>Sesuai cara kamu kerja.</p></div></div><div className="settings-group"><Link to={routes.profile} className="settings-row"><span className="settings-icon incoming"><Store /></span><span><strong>{activeStore?.name ?? 'Profil toko'}</strong><small>Profil & pengelolaan toko</small></span><ChevronRight size={17} /></Link></div><p className="mobile-section-eyebrow">TAMPILAN</p><div className="mobile-filter-row theme-segment" role="group" aria-label="Tampilan"><button aria-pressed={theme === 'light'} className={theme === 'light' ? 'selected' : ''} onClick={() => { if (theme !== 'light') toggleTheme() }}><Sun size={15} /> Terang</button><button aria-pressed={theme === 'dark'} className={theme === 'dark' ? 'selected' : ''} onClick={() => { if (theme !== 'dark') toggleTheme() }}><Moon size={15} /> Gelap</button></div><p className="mobile-section-eyebrow">PREFERENSI TOKO</p><div className="settings-group"><button className="settings-row" onClick={() => showToast('Notifikasi stok tersedia melalui ikon lonceng di atas.', 'info')}><span className="settings-icon incoming"><Bell /></span><span><strong>Notifikasi Android</strong><small>Ringkasan stok di panel notifikasi</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={openWhatsApp}><span className="settings-icon incoming"><MessageCircle /></span><span><strong>Ringkasan WhatsApp</strong><small>Siapkan laporan untuk dibagikan</small></span><ChevronRight size={17} /></button><Link to={routes.logsInput} className="settings-row"><span className="settings-icon info"><Database /></span><span><strong>Data & koneksi</strong><small>{mode === 'supabase' ? 'Terhubung ke Supabase' : 'Mode demo'} · Logs Input</small></span><ChevronRight size={17} /></Link></div><p className="mobile-section-eyebrow">AKUN & APLIKASI</p><div className="settings-group"><button className="settings-row" onClick={openAccountSettings}><span className="settings-icon incoming"><UserCog /></span><span><strong>Pengaturan akun</strong><small>Email & kata sandi</small></span><ChevronRight size={17} /></button><Link to={routes.history} className="settings-row"><span className="settings-icon incoming"><History /></span><span><strong>History barang</strong><small>Riwayat seluruh transaksi</small></span><ChevronRight size={17} /></Link><Link to={routes.logsInput} className="settings-row"><span className="settings-icon incoming"><ScrollText /></span><span><strong>Logs Input</strong><small>Jejak perubahan data</small></span><ChevronRight size={17} /></Link><button className="settings-row" onClick={() => setAboutOpen(true)}><span className="settings-icon incoming"><Info /></span><span><strong>Tentang aplikasi</strong><small>ABElektronik · Inventory V2</small></span><ChevronRight size={17} /></button><button className="settings-row" onClick={() => void handleExit()}><span className="settings-icon outgoing"><LogOut /></span><span><strong>Keluar akun</strong><small>Akhiri sesi di perangkat ini</small></span><ChevronRight size={17} /></button></div></div>
+      <div className="hidden lg:block"><div>
         <p className="text-sm text-cyan-100/70">Preference</p>
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Pengaturan</h1>
       </div>
@@ -246,6 +250,7 @@ export function SettingsPage() {
           </span>
         </button>
       </GlassPanel>
+      </div>
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-lg">
@@ -260,7 +265,7 @@ export function SettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4 text-sm text-white/62">
-            Versi 1.0.0 (c) by Al Fajrin A Alamsyah 2025
+            Versi 1.1.0-beta.1 (c) by Al Fajrin A Alamsyah 2025
           </div>
           <DialogFooter>
             <Button type="button" onClick={() => setAboutOpen(false)}>

@@ -14,8 +14,13 @@ import {
   SlidersHorizontal,
   Trash2,
   X,
+  Package,
+  PackagePlus,
+  PackageMinus,
+  MoreHorizontal,
 } from 'lucide-react'
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
 import { EmptyState, ErrorState, TableSkeleton } from '@/components/shared/data-state'
@@ -23,6 +28,7 @@ import { GlassPanel } from '@/components/shared/glass-panel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -45,6 +51,7 @@ import {
   type ProductScanSuggestion,
 } from '@/lib/barcode-product-reference'
 import { formatCurrency, formatNumber, matchProduct } from '@/lib/format'
+import { routes } from '@/lib/navigation'
 import type { Product, ProductInput } from '@/lib/types'
 
 type ProductFormState = {
@@ -196,6 +203,9 @@ async function downloadBarcodePdf(products: Product[]) {
 }
 
 export function ProductsPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const handledParams = useRef('')
   const {
     activeStore,
     products,
@@ -212,6 +222,7 @@ export function ProductsPage() {
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [sort, setSort] = useState<ProductSort>('az')
+  const [stockFilter, setStockFilter] = useState<'all' | 'low' | 'empty'>('all')
   const [page, setPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
@@ -224,9 +235,9 @@ export function ProductsPage() {
   const [scanSuggestion, setScanSuggestion] = useState<ProductScanSuggestion | null>(null)
 
   const filteredProducts = useMemo(() => {
-    const result = deferredSearch.trim() ? products.filter((product) => matchProduct(product, deferredSearch)) : products
+    const result = products.filter((product) => (!deferredSearch.trim() || matchProduct(product, deferredSearch)) && (stockFilter === 'all' || (stockFilter === 'low' ? product.stok <= 5 : product.stok === 0)))
     return [...result].sort((a, b) => compareProducts(sort, a, b))
-  }, [products, deferredSearch, sort])
+  }, [products, deferredSearch, sort, stockFilter])
 
   const lastPage = Math.max(0, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE) - 1)
   const visiblePage = Math.min(page, lastPage)
@@ -264,6 +275,19 @@ export function ProductsPage() {
       setFormOpen(true)
     }
   }, [])
+
+  useEffect(() => {
+    const key = searchParams.toString()
+    if (!key || handledParams.current === key) return
+    handledParams.current = key
+    if (searchParams.get('stock') === 'low') setStockFilter('low')
+    if (searchParams.get('create') === '1') {
+      setEditingProduct(null)
+      setScanSuggestion(null)
+      setForm(emptyForm)
+      setFormOpen(true)
+    }
+  }, [searchParams])
 
   const openCreateForm = () => {
     setEditingProduct(null)
@@ -427,8 +451,13 @@ export function ProductsPage() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="products-page space-y-5">
+      <div className="mobile-products-intro lg:hidden"><div className="mobile-page-heading"><div><h1>Data barang</h1><p>Cari cepat, kelola lebih mudah.</p></div><button type="button" aria-label="Tambah barang" onClick={openCreateForm}><Plus size={20} /></button></div>
+        <div className="mobile-search"><Search size={18} /><input aria-label="Cari barang" value={search} onChange={event => { setSearch(event.target.value); setPage(0) }} placeholder="Nama, merek, atau barcode" /><button type="button" aria-label="Buka scanner" onClick={() => setScannerOpen(true)}><ScanLine size={18} /></button></div>
+        <div className="mobile-filter-row" role="group" aria-label="Filter stok">{([['all', 'Semua'], ['low', 'Stok rendah'], ['empty', 'Habis']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={stockFilter === value} className={stockFilter === value ? 'selected' : ''} onClick={() => { setStockFilter(value); setPage(0) }}>{label}</button>)}</div>
+        <div className="mobile-results-row"><span>{filteredProducts.length} dari {products.length} produk</span><button type="button" onClick={openBarcodePreview}><Barcode size={15} /> Barcode {selectedIds.length > 0 ? `(${selectedIds.length})` : ''}</button></div>
+      </div>
+      <div className="hidden flex-col gap-4 lg:flex lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm text-cyan-100/70">Inventory CRUD</p>
           <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Stok Data Barang</h1>
@@ -445,7 +474,7 @@ export function ProductsPage() {
         </div>
       </div>
 
-      <GlassPanel className="p-4" glow="cyan">
+      <GlassPanel className="hidden p-4 lg:block" glow="cyan">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto] lg:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/42" />
@@ -476,7 +505,7 @@ export function ProductsPage() {
         </div>
       </GlassPanel>
 
-      <GlassPanel className="overflow-hidden p-0" glow="emerald">
+      <GlassPanel className="product-list-panel overflow-hidden p-0" glow="emerald">
         {loading && !productsReady ? (
           <div className="p-5">
             <TableSkeleton />
@@ -546,40 +575,16 @@ export function ProductsPage() {
               </Table>
             </div>
 
-            <div className="space-y-2.5 p-3 lg:hidden">
+            <div className="mobile-product-list space-y-2.5 p-0 lg:hidden">
               {visibleProducts.map((product, index) => (
                 <div
                   key={product.id}
-                  className="product-card-compact rounded-lg border border-white/10 bg-white/[0.055] p-3"
+                  className="mobile-product-card"
                   style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-white">{product.namaBarang}</p>
-                      <p className="text-sm text-white/52">{product.brand}</p>
-                    </div>
-                    <Checkbox aria-label={`Pilih ${product.namaBarang}`} checked={selectedIdSet.has(product.id)} onCheckedChange={() => toggleSelect(product.id)} />
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <p className="text-white/42">Harga</p>
-                      <p className="font-mono text-white">{formatCurrency(product.harga)}</p>
-                    </div>
-                    <div>
-                      <p className="text-white/42">Stok</p>
-                      <p className="font-mono text-white">{product.stok}</p>
-                    </div>
-                  </div>
-                  <p className="mt-2 font-mono text-xs text-cyan-100/72">{product.barcode}</p>
-                  <div className="mt-3 flex gap-2">
-                    <Button type="button" variant="outline" className="flex-1" aria-label={`Edit ${product.namaBarang}`} onClick={() => openEditForm(product)}>
-                      <Edit3 className="size-4" />
-                      Edit
-                    </Button>
-                    <Button type="button" variant="ghost" className="text-rose-200" aria-label={`Hapus ${product.namaBarang}`} onClick={() => void handleDelete(product)}>
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
+                  <div className="product-head"><span className="product-symbol"><Package size={19} /></span><div><strong>{product.namaBarang}</strong><small>{product.brand} · {product.barcode}</small></div><Checkbox aria-label={`Pilih ${product.namaBarang} untuk barcode`} checked={selectedIdSet.has(product.id)} onCheckedChange={() => toggleSelect(product.id)} /></div>
+                  <div className="product-facts"><strong>{formatCurrency(product.harga)}</strong><span className={product.stok === 0 ? 'empty' : product.stok <= 5 ? 'low' : 'safe'}>{product.stok === 0 ? 'Habis' : product.stok <= 5 ? 'Menipis' : 'Aman'} · {product.stok} unit</span></div>
+                  <div className="product-actions"><button type="button" onClick={() => navigate(`${routes.history}?action=masuk&product=${encodeURIComponent(product.id)}`)}><PackagePlus size={16} /> Masuk</button><button type="button" onClick={() => navigate(`${routes.history}?action=keluar&product=${encodeURIComponent(product.id)}`)}><PackageMinus size={16} /> Keluar</button><DropdownMenu><DropdownMenuTrigger asChild><button type="button" aria-label={`Aksi lainnya untuk ${product.namaBarang}`}><MoreHorizontal size={20} /></button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={() => openEditForm(product)}><Edit3 size={16} /> Edit barang</DropdownMenuItem><DropdownMenuItem onClick={() => { setSelectedIds([product.id]); setBarcodeOpen(true) }}><Barcode size={16} /> Barcode</DropdownMenuItem><DropdownMenuItem onClick={() => void handleDelete(product)}><Trash2 size={16} /> Hapus barang</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
                 </div>
               ))}
             </div>

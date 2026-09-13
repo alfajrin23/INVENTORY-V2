@@ -242,7 +242,7 @@ test('mobile bottom navigation and desktop navigation', async ({ page }) => {
 
 test('add, edit, barcode export, search, delete product', async ({ page }) => {
   await page.setViewportSize({width:390,height:844}); await page.goto('/databarang.html')
-  await page.getByRole('button',{name:'Tambah Barang',exact:true}).click()
+  await page.getByRole('button',{name:'Tambah barang',exact:true}).click()
   await page.getByLabel('Nama Barang',{exact:true}).fill('Lampu Philips')
   await page.getByLabel('Brand',{exact:true}).fill('Philips')
   await page.getByLabel('Harga',{exact:true}).fill('15000')
@@ -250,18 +250,20 @@ test('add, edit, barcode export, search, delete product', async ({ page }) => {
   await page.getByLabel('Barcode',{exact:true}).fill('123456789')
   await page.getByRole('button',{name:'Simpan',exact:true}).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.getByPlaceholder('Cari nama barang, brand, barcode').fill('Lampu Philips')
-  await page.getByRole('button',{name:'Edit Lampu Philips',exact:true}).click()
+  await page.getByRole('textbox',{name:'Cari barang'}).fill('Lampu Philips')
+  await page.getByRole('button',{name:'Aksi lainnya untuk Lampu Philips'}).click()
+  await page.getByRole('menuitem',{name:'Edit barang'}).click()
   await page.getByLabel('Stok',{exact:true}).fill('20')
   await page.getByRole('button',{name:'Simpan',exact:true}).click()
   await expect.poll(async () => (await data(page)).products.find((p: {barcode:string})=>p.barcode==='123456789').stok).toBe(20)
-  await page.getByRole('checkbox',{name:'Pilih Lampu Philips'}).check()
-  await page.getByRole('button',{name:'Generate Barcode'}).click()
+  await page.getByRole('checkbox',{name:'Pilih Lampu Philips untuk barcode'}).check()
+  await page.getByRole('button',{name:/^Barcode/}).click()
   const download = page.waitForEvent('download'); await page.getByRole('button',{name:'Save PDF',exact:true}).click()
   expect((await download).suggestedFilename()).toContain('.pdf')
   await page.getByRole('button',{name:'Tutup',exact:true}).click()
   page.on('dialog',d=>d.accept())
-  await page.getByRole('button',{name:'Hapus Lampu Philips'}).click()
+  await page.getByRole('button',{name:'Aksi lainnya untuk Lampu Philips'}).click()
+  await page.getByRole('menuitem',{name:'Hapus barang'}).click()
   await expect(page.getByText('Produk tidak ditemukan')).toBeVisible()
 })
 
@@ -289,7 +291,7 @@ test('large product lists render one page and keep search responsive', async ({ 
   await expect(page.locator('table tbody tr')).toHaveCount(1)
   await expect(page.getByRole('button', { name: 'Edit Produk Performa 149' }).first()).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByPlaceholder('Cari nama barang, brand, barcode').fill('')
+  await page.getByRole('textbox',{name:'Cari barang'}).fill('')
   await expect(page.getByRole('button', { name: 'Halaman berikutnya' })).toBeVisible()
   await page.getByRole('button', { name: 'Halaman berikutnya' }).click()
   await expect(page.getByText(/^2\/\d+$/)).toBeVisible()
@@ -298,7 +300,7 @@ test('large product lists render one page and keep search responsive', async ({ 
 test('add product scanner recognizes draft reference and keeps fields editable', async ({page}) => {
   await page.setViewportSize({width:390,height:844})
   await page.goto('/databarang.html')
-  await page.getByRole('button',{name:'Tambah Barang',exact:true}).click()
+  await page.getByRole('button',{name:'Tambah barang',exact:true}).click()
   await page.getByRole('button',{name:'Scan Barcode',exact:true}).click()
   await page.getByLabel('Input barcode manual').fill('brand Philips nama Lampu LED 12W barcode 7770003 harga 35000 stok 7')
   await page.getByRole('button',{name:'Cari barcode'}).click()
@@ -476,7 +478,7 @@ test('negative stock, missing product and unknown intent never write',async ({pa
 
 test('scanner fallback, missing barcode, cart, receipt PDF and print',async ({page})=>{
   await page.setViewportSize({width:320,height:800});await page.goto('/')
-  await page.getByRole('button',{name:'Buka scanner',exact:true}).click()
+  await page.getByRole('button',{name:'Scan',exact:true}).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.getByRole('button',{name:'Tutup scanner'})).toHaveCount(1)
   await expect(page.locator('.scanner-target-frame')).toBeVisible()
@@ -611,7 +613,7 @@ test('manual quantity validation and changed barcode do not reuse previous selec
 test('scanner repeat manual detection does not duplicate cart selection',async ({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message))
   await page.setViewportSize({width:360,height:800});await page.goto('/')
-  await page.getByRole('button',{name:'Buka scanner',exact:true}).click()
+  await page.getByRole('button',{name:'Scan',exact:true}).click()
   await page.getByLabel('Input barcode manual').fill('8991001000011')
   await page.getByRole('button',{name:'Cari barcode'}).evaluate((button:HTMLButtonElement)=>{button.click();button.click()})
   await expect(page.getByRole('heading',{name:'Keranjang Transaksi'})).toBeVisible()
@@ -634,7 +636,7 @@ test('mobile voice sheet and scanner camera fit Android viewport', async ({page}
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.getByRole('button',{name:'Batalkan',exact:true}).click()
 
-  await page.getByRole('button',{name:'Buka scanner',exact:true}).click()
+  await page.getByRole('button',{name:'Scan',exact:true}).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect.poll(() => page.getByRole('dialog').evaluate(el => {
     const r = el.getBoundingClientRect()
@@ -650,11 +652,11 @@ test('mobile voice sheet and scanner camera fit Android viewport', async ({page}
 test('mobile light visual evidence and reduced height dialog',async ({page})=>{
   await page.setViewportSize({width:390,height:844});await page.goto('/laporan.html')
   await expect(page.locator('html')).toHaveClass('light')
-  await expect.poll(()=>page.locator('[data-glass-panel]').first().evaluate(el=>getComputedStyle(el).opacity)).toBe('1')
+  await expect(page.locator('.mobile-reports .revenue-hero')).toBeVisible()
   await page.screenshot({path:'artifacts/mobile-reports-light.png'})
   await mockSpeech(page,'transaksi charger Anker dua');await page.goto('/')
   await expect(page.getByRole('heading',{name:'Pendapatan 7 Hari'})).toBeVisible()
-  await expect.poll(()=>page.locator('[data-glass-panel]').first().evaluate(el=>getComputedStyle(el).opacity)).toBe('1')
+  await expect(page.locator('.mobile-chart-card')).toBeVisible()
   await page.screenshot({path:'artifacts/mobile-dashboard-light.png'})
   await page.getByRole('button',{name:'Buka Voice AI'}).click()
   await expect(page.getByRole('button',{name:'Konfirmasi',exact:true})).toBeEnabled()

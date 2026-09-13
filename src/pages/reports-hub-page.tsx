@@ -1,7 +1,9 @@
-import { ArrowRight, BarChart3, PackageCheck, PackageMinus, PackagePlus } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { ArrowRight, BarChart3, ChevronRight, MessageCircle, PackageCheck, PackageMinus, PackagePlus, TrendingUp } from 'lucide-react'
+import { Link, useOutletContext } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
+import { useInventory } from '@/hooks/use-inventory'
+import { formatCurrency } from '@/lib/format'
 import { routes } from '@/lib/navigation'
 import { cn } from '@/lib/utils'
 
@@ -40,9 +42,18 @@ const reportCards = [
 ] as const
 
 export function ReportsHubPage() {
+  const { history } = useInventory()
+  const { openWhatsApp } = useOutletContext<{ openWhatsApp: () => void }>()
+  const now = new Date()
+  const monthlyRevenue = history.reduce((sum, item) => {
+    const date = new Date(item.tanggal)
+    return item.kategori === 'keluar' && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear() ? sum + item.harga * item.jumlah : sum
+  }, 0)
+  const monthName = new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(now)
   return (
     <div className="space-y-5">
-      <div>
+      <div className="mobile-reports lg:hidden"><div className="mobile-page-heading"><div><h1>Laporan</h1><p>Kenali ritme tokomu.</p></div></div><section className="revenue-hero"><span>Pendapatan bulan ini</span><strong>{formatCurrency(monthlyRevenue)}</strong><div><span>{monthName} {now.getFullYear()}</span></div></section><p className="mobile-section-eyebrow">RINGKASAN {monthName.toUpperCase()}</p><div className="report-list"><Link to={routes.revenueDay}><span className="report-icon accent"><TrendingUp /></span><span><strong>Pendapatan</strong><small>Harian, mingguan, bulanan, tahunan</small></span><ChevronRight size={17} /></Link><Link to={routes.incomingReport}><span className="report-icon incoming"><PackagePlus /></span><span><strong>Barang masuk</strong><small>Restock & penambahan stok</small></span><ChevronRight size={17} /></Link><Link to={routes.outgoingReport}><span className="report-icon outgoing"><PackageMinus /></span><span><strong>Barang keluar</strong><small>Penjualan & pengurangan stok</small></span><ChevronRight size={17} /></Link><Link to={routes.stockReport}><span className="report-icon info"><PackageCheck /></span><span><strong>Stok barang</strong><small>Stok terkini & nilai persediaan</small></span><ChevronRight size={17} /></Link></div><button className="whatsapp-summary" type="button" onClick={openWhatsApp}><MessageCircle size={17} /> Ringkasan WhatsApp</button></div>
+      <div className="hidden lg:block"><div>
         <p className="text-sm text-cyan-100/70">Report Center</p>
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Laporan Data Toko</h1>
       </div>
@@ -78,6 +89,7 @@ export function ReportsHubPage() {
           )
         })}
       </section>
+      </div>
     </div>
   )
 }
