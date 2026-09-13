@@ -279,7 +279,10 @@ test('large product lists render one page and keep search responsive', async ({ 
     localStorage.setItem(key, JSON.stringify(state))
   })
   await page.reload()
-  await expect(page.locator('table tbody tr')).toHaveCount(24)
+  await expect(page.locator('table tbody tr')).toHaveCount(7)
+  await page.getByRole('combobox', { name: 'Urutkan data barang' }).click()
+  await page.getByRole('option', { name: 'Harga tertinggi' }).click()
+  await expect(page.getByRole('cell', { name: /Speaker Bluetooth Mini|Charger USB-C 33W|Kabel HDMI 2 Meter/ }).first()).toBeVisible()
   await page.getByRole('button', { name: 'Halaman berikutnya' }).click()
   await expect(page.getByText(/^2\/\d+$/)).toBeVisible()
   await page.getByPlaceholder('Cari nama barang, brand, barcode').fill('Produk Performa 149')
@@ -490,7 +493,9 @@ test('scanner fallback, missing barcode, cart, receipt PDF and print',async ({pa
 
 test('report PDF exports and theme',async ({page})=>{
   await page.goto('/')
-  await page.getByRole('button',{name:'Ganti tema'}).click();await expect(page.locator('html')).toHaveClass('light')
+  const initialTheme = await page.locator('html').getAttribute('class')
+  await page.getByRole('button',{name:'Ganti tema'}).click()
+  await expect(page.locator('html')).toHaveClass(initialTheme === 'light' ? 'dark' : 'light')
   for(const route of ['/laporanbarangmasuk.html','/laporanbarangkeluar.html','/laporanstokbarang.html','/pendapatanharian.html','/pendapatanmingguan.html','/pendapatanbulanan.html','/laporanpendapatan.html']) {
     await page.goto(route);const download=page.waitForEvent('download');await page.getByRole('button',{name:'Simpan PDF'}).click();expect((await download).suggestedFilename()).toContain('.pdf')
   }

@@ -31,6 +31,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useInventory } from '@/hooks/use-inventory'
+import { useThemeMode } from '@/hooks/use-theme-mode'
 import { useToast } from '@/hooks/use-toast'
 import { buildWhatsAppSummary, matchProduct } from '@/lib/format'
 import { mobileNavigation, navigationItems, routes } from '@/lib/navigation'
@@ -56,6 +57,7 @@ export function AppShell() {
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [notificationReady, setNotificationReady] = useState(false)
   const [notificationIssue, setNotificationIssue] = useState('')
+  const { theme, toggleTheme } = useThemeMode()
   const lastNotificationSignature = useRef('')
   const lastNotificationError = useRef('')
   const loadingRef = useRef(loading)
@@ -68,14 +70,6 @@ export function AppShell() {
       showToast(message, 'error')
     }
   }, [showToast])
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    if (typeof window === 'undefined') {
-      return 'dark'
-    }
-
-    const stored = localStorage.getItem('theme')
-    return stored === 'light' || (!stored && window.matchMedia('(max-width: 1023px)').matches) ? 'light' : 'dark'
-  })
   const [search, setSearch] = useState('')
   const profilePhoto = typeof window !== 'undefined' ? localStorage.getItem('profilePhoto') : ''
   const groupedNav = useMemo(
@@ -92,12 +86,6 @@ export function AppShell() {
 
     return products.filter((product) => matchProduct(product, search)).slice(0, 5)
   }, [products, search])
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark')
-    document.documentElement.classList.toggle('light', theme === 'light')
-    localStorage.setItem('theme', theme)
-  }, [theme])
 
   useEffect(() => {
     loadingRef.current = loading
@@ -332,8 +320,11 @@ export function AppShell() {
                 type="button"
                 variant="outline"
                 size="icon-lg"
-                aria-label="Ganti tema" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
-                className="hidden border-white/12 bg-white/[0.07] text-white hover:bg-white/12 sm:inline-flex"
+                aria-label="Ganti tema" onClick={toggleTheme}
+                className={cn(
+                  'theme-toggle-button hidden border-white/12 text-white hover:bg-white/12 sm:inline-flex',
+                  theme === 'light' ? 'bg-amber-300/18' : 'bg-indigo-300/14',
+                )}
               >
                 {theme === 'dark' ? <Moon className="size-4" /> : <Sun className="size-4" />}
               </Button>

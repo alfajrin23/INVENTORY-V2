@@ -49,3 +49,38 @@ test('forgot password sends a recovery request and returns to login', async ({ p
   await page.getByRole('button', { name: 'Kembali ke masuk' }).click()
   await expect(page.getByRole('heading', { name: 'Masuk ke Inventory' })).toBeVisible()
 })
+
+test('create account submits a new admin signup request', async ({ page }) => {
+  let signupPayload: Record<string, unknown> | null = null
+  await page.route('http://127.0.0.1:54321/auth/v1/signup', async route => {
+    signupPayload = route.request().postDataJSON()
+    await route.fulfill({
+      status: 200,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'application/json' },
+      json: {
+        user: {
+          id: 'new-admin',
+          email: signupPayload?.email,
+          app_metadata: {},
+          user_metadata: signupPayload?.data ?? {},
+        },
+        session: null,
+      },
+    })
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Create account' }).click()
+  await expect(page.getByRole('heading', { name: 'Buat akun admin' })).toBeVisible()
+  await page.getByLabel('Email', { exact: true }).fill('admin@example.test')
+  await page.getByLabel('Password baru', { exact: true }).fill('password-admin')
+  await page.getByLabel('Konfirmasi password').fill('password-admin')
+  await page.getByRole('button', { name: 'Buat akun' }).click()
+  await expect(page.getByRole('status')).toContainText('Akun admin dibuat')
+  await expect(page.getByRole('heading', { name: 'Masuk ke Inventory' })).toBeVisible()
+  expect(signupPayload).toMatchObject({
+    email: 'admin@example.test',
+    password: 'password-admin',
+    data: { role: 'admin' },
+  })
+})

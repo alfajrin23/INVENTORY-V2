@@ -9,11 +9,12 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
   const uid='00000000-0000-4000-8000-000000000001'
   const store='00000000-0000-4000-8000-000000000010'
   const product='00000000-0000-4000-8000-000000000020'
-  const user={id:uid,aud:'authenticated',role:'authenticated',email:'owner@example.test',created_at:new Date().toISOString(),app_metadata:{},user_metadata:{}}
+  let user={id:uid,aud:'authenticated',role:'authenticated',email:'owner@example.test',created_at:new Date().toISOString(),app_metadata:{},user_metadata:{}}
   const token=[{alg:'HS256',typ:'JWT'},{sub:uid,role:'authenticated',exp:Math.floor(Date.now()/1000)+3600},'signature'].map(v=>Buffer.from(JSON.stringify(v)).toString('base64url')).join('.')
   const rpcIds: string[]=[]
   let loseResponse=true
   const restRequests:string[]=[]
+  let accountUpdate: Record<string, unknown> | null = null
   let queryQueue: Promise<void> = Promise.resolve()
   const runQuery = <T,>(task: () => Promise<T>) => {
     const result = queryQueue.then(task)
@@ -24,16 +25,22 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     create function auth.uid() returns uuid language sql as $$select '${uid}'::uuid$$;
     grant usage on schema public,auth to authenticated;
     insert into auth.users values('${uid}');`)
-  for(const file of ['001_inventory_schema.sql','002_inventory_transaction_rpc.sql','003_transaction_revision_audit.sql','004_performance_tuning.sql']) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'))
+  for(const file of ['001_inventory_schema.sql','002_inventory_transaction_rpc.sql','003_transaction_revision_audit.sql','004_performance_tuning.sql','005_user_profiles.sql']) await db.exec(await readFile(`supabase/migrations/${file}`,'utf8'))
   await db.exec(`set role authenticated;
     insert into stores(id,name) values('${store}','Toko SQL');
     insert into products(id,store_id,nama_barang,brand,harga,stok,barcode) values('${product}','${store}','Lampu Philips','Philips',15000,15,'12345');`)
   await page.route('http://127.0.0.1:54321/**',async route=>{
     const url=new URL(route.request().url()); const method=route.request().method()
-    const headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PATCH,DELETE,OPTIONS','content-type':'application/json'}
+    const headers={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,PUT,PATCH,DELETE,OPTIONS','content-type':'application/json'}
     if(method==='OPTIONS') {await route.fulfill({status:200,headers,body:''});return}
     if(url.pathname==='/auth/v1/token') {await route.fulfill({headers,json:{access_token:token,refresh_token:'test-refresh',expires_in:3600,token_type:'bearer',user}});return}
-    if(url.pathname==='/auth/v1/user') {await route.fulfill({headers,json:user});return}
+    if(url.pathname==='/auth/v1/user') {
+      if(method === 'PUT') {
+        accountUpdate = route.request().postDataJSON()
+        user = { ...user, email: String(accountUpdate?.email ?? user.email) }
+      }
+      await route.fulfill({headers,json:user});return
+    }
     restRequests.push(`${method} ${url.pathname}`)
     try {
       if(url.pathname==='/rest/v1/rpc/process_inventory_transaction') {
@@ -90,6 +97,14 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     expect((await db.query<{stok:number}>('select stok from products')).rows[0].stok).toBe(13)
     expect((await db.query('select * from history')).rows).toHaveLength(1)
     await page.goto('/pengaturan.html')
+    await page.getByRole('button',{name:'Pengaturan Akun'}).click()
+    await page.getByLabel('Email Login').fill('admin-baru@example.test')
+    await page.getByLabel('Password Baru Akun').fill('password-baru-123')
+    await page.getByLabel('Konfirmasi Password Akun').fill('password-baru-123')
+    await page.getByRole('button',{name:'Simpan Akun'}).click()
+    await expect(page.getByRole('status')).toContainText('Akun diperbarui')
+    expect(accountUpdate).toMatchObject({ email: 'admin-baru@example.test', password: 'password-baru-123' })
+    await page.getByRole('button',{name:'Batal'}).click()
     await page.getByRole('link',{name:'Logs Input'}).click()
     await expect(page.getByRole('heading',{name:'Logs Input'})).toBeVisible()
     await expect(page.getByRole('row').filter({hasText:'Hapus transaksi: Lampu Philips'})).toBeVisible()

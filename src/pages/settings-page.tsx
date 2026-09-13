@@ -1,5 +1,5 @@
-import { History, Info, LogOut, ScrollText, ShieldCheck, Store, X } from 'lucide-react'
-import { useState } from 'react'
+import { History, Info, LogOut, Moon, Save, ScrollText, ShieldCheck, Store, Sun, UserCog, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
@@ -12,13 +12,51 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useThemeMode } from '@/hooks/use-theme-mode'
 import { useToast } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
 import { demoEnabled, supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 
 export function SettingsPage() {
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [accountEmail, setAccountEmail] = useState('')
+  const [currentEmail, setCurrentEmail] = useState('')
+  const [accountPassword, setAccountPassword] = useState('')
+  const [accountConfirm, setAccountConfirm] = useState('')
+  const [accountLoading, setAccountLoading] = useState(false)
+  const [accountSaving, setAccountSaving] = useState(false)
+  const [accountError, setAccountError] = useState('')
+  const [accountNotice, setAccountNotice] = useState('')
+  const { theme, toggleTheme } = useThemeMode()
   const { showToast } = useToast()
+
+  useEffect(() => {
+    if (!accountOpen || !supabase || demoEnabled) return
+
+    let alive = true
+    void supabase.auth.getUser()
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) throw error
+        const email = data.user?.email ?? ''
+        setAccountEmail(email)
+        setCurrentEmail(email)
+      })
+      .catch(() => {
+        if (alive) setAccountError('Data akun gagal dimuat. Coba masuk ulang jika sesi sudah habis.')
+      })
+      .finally(() => {
+        if (alive) setAccountLoading(false)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [accountOpen])
 
   const handleExit = async () => {
     if (supabase && !demoEnabled) {
@@ -37,6 +75,73 @@ export function SettingsPage() {
     }, 350)
   }
 
+  const openAccountSettings = () => {
+    setAccountError('')
+    setAccountNotice('')
+    setAccountPassword('')
+    setAccountConfirm('')
+    if (!supabase || demoEnabled) {
+      setAccountEmail('demo@abelektronik.local')
+      setCurrentEmail('demo@abelektronik.local')
+      setAccountLoading(false)
+    } else {
+      setAccountEmail('')
+      setCurrentEmail('')
+      setAccountLoading(true)
+    }
+    setAccountOpen(true)
+  }
+
+  const handleAccountSave = async () => {
+    setAccountError('')
+    setAccountNotice('')
+
+    if (!supabase || demoEnabled) {
+      setAccountNotice('Mode demo tidak mengubah akun Supabase.')
+      return
+    }
+
+    const nextEmail = accountEmail.trim()
+    if (!nextEmail) {
+      setAccountError('Email wajib diisi.')
+      return
+    }
+
+    if (accountPassword && accountPassword.length < 8) {
+      setAccountError('Password minimal 8 karakter.')
+      return
+    }
+
+    if (accountPassword && accountPassword !== accountConfirm) {
+      setAccountError('Konfirmasi password belum sama.')
+      return
+    }
+
+    const updates: { email?: string; password?: string } = {}
+    if (nextEmail !== currentEmail) updates.email = nextEmail
+    if (accountPassword) updates.password = accountPassword
+
+    if (!Object.keys(updates).length) {
+      setAccountNotice('Tidak ada perubahan akun yang perlu disimpan.')
+      return
+    }
+
+    setAccountSaving(true)
+    try {
+      const { error } = await supabase.auth.updateUser(updates)
+      if (error) throw error
+      setCurrentEmail(nextEmail)
+      setAccountPassword('')
+      setAccountConfirm('')
+      setAccountNotice(updates.email ? 'Akun diperbarui. Jika Supabase meminta konfirmasi email, cek inbox email lama dan baru.' : 'Password berhasil diperbarui.')
+      showToast('Pengaturan akun diperbarui', 'success')
+    } catch {
+      setAccountError('Pengaturan akun gagal disimpan. Periksa koneksi atau sesi login Anda.')
+    } finally {
+      setAccountSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div>
@@ -44,7 +149,7 @@ export function SettingsPage() {
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Pengaturan</h1>
       </div>
 
-      <div className="grid max-w-2xl gap-2 sm:grid-cols-3">
+      <div className="grid max-w-4xl gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
           <Link to={routes.profile}>
             <Store className="size-4" />
@@ -62,6 +167,24 @@ export function SettingsPage() {
             <ScrollText className="size-4" />
             Logs Input
           </Link>
+        </Button>
+        <Button type="button" variant="outline" onClick={openAccountSettings} className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <UserCog className="size-4" />
+          Pengaturan Akun
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={toggleTheme}
+          className={cn(
+            'theme-toggle-button h-11 justify-start border-white/12 text-white transition-colors',
+            theme === 'light'
+              ? 'bg-gradient-to-r from-amber-300/24 via-cyan-300/16 to-white/10 hover:from-amber-300/32'
+              : 'bg-gradient-to-r from-indigo-300/18 via-cyan-300/14 to-white/[0.07] hover:from-indigo-300/26',
+          )}
+        >
+          {theme === 'light' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          {theme === 'light' ? 'Mode Light' : 'Mode Dark'}
         </Button>
       </div>
 
@@ -117,6 +240,69 @@ export function SettingsPage() {
             <Button type="button" onClick={() => setAboutOpen(false)}>
               <X className="size-4" />
               Tutup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+        <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-lg">
+          <DialogHeader>
+            <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-emerald-300/12 text-emerald-100">
+              <UserCog className="size-6" />
+            </div>
+            <DialogTitle className="text-white">Pengaturan Akun</DialogTitle>
+            <DialogDescription className="text-white/62">
+              Role akun: Admin. Ubah email atau password login dari sini.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="account-email">Email Login</Label>
+              <Input
+                id="account-email"
+                type="email"
+                value={accountEmail}
+                disabled={accountLoading || accountSaving}
+                onChange={(event) => setAccountEmail(event.target.value)}
+                className="border-white/12 bg-white/8 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="account-password">Password Baru Akun</Label>
+              <Input
+                id="account-password"
+                type="password"
+                value={accountPassword}
+                disabled={accountLoading || accountSaving}
+                onChange={(event) => setAccountPassword(event.target.value)}
+                placeholder="Kosongkan jika tidak diganti"
+                className="border-white/12 bg-white/8 text-white placeholder:text-white/38"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="account-confirm">Konfirmasi Password Akun</Label>
+              <Input
+                id="account-confirm"
+                type="password"
+                value={accountConfirm}
+                disabled={accountLoading || accountSaving || !accountPassword}
+                onChange={(event) => setAccountConfirm(event.target.value)}
+                placeholder="Ulangi password baru"
+                className="border-white/12 bg-white/8 text-white placeholder:text-white/38"
+              />
+            </div>
+            {accountError ? <p role="alert" className="rounded-xl border border-rose-300/20 bg-rose-400/12 p-3 text-sm text-rose-100">{accountError}</p> : null}
+            {accountNotice ? <p role="status" className="rounded-xl border border-emerald-300/20 bg-emerald-300/12 p-3 text-sm text-emerald-100">{accountNotice}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAccountOpen(false)}>
+              <X className="size-4" />
+              Batal
+            </Button>
+            <Button type="button" disabled={accountLoading || accountSaving} onClick={() => void handleAccountSave()} className="bg-emerald-300 text-slate-950 hover:bg-emerald-200">
+              <Save className="size-4" />
+              {accountSaving ? 'Menyimpan...' : 'Simpan Akun'}
             </Button>
           </DialogFooter>
         </DialogContent>

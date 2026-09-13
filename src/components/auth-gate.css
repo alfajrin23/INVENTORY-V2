@@ -65,7 +65,8 @@
 .auth-input-row input::placeholder { color: #8490a1; }
 .auth-eye { display: grid; width: 32px; height: 34px; flex: 0 0 32px; place-items: center; border: 0; background: transparent; color: #9ba9bb; }
 .auth-eye:hover, .auth-eye:focus-visible { color: #dceaff; }
-.auth-options { display: flex; min-height: 24px; align-items: center; justify-content: flex-end; }
+.auth-options { display: flex; min-height: 24px; align-items: center; justify-content: flex-end; gap: 12px; }
+.auth-options--split { justify-content: space-between; }
 .auth-options button, .auth-back { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #b9d2fb; font-size: 13px; }
 .auth-options button:hover, .auth-back:hover { color: white; text-decoration: underline; }
 .auth-submit {
@@ -101,6 +102,7 @@
   .auth-panel { padding: 60px 22px 22px; border-radius: 18px; }
   .auth-panel h1 { font-size: 26px; }
   .auth-intro { margin-bottom: 24px; }
+  .auth-options--split { align-items: flex-start; flex-direction: column; gap: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .auth-mascot { animation: none; }

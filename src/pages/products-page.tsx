@@ -11,6 +11,7 @@ import {
   Save,
   ScanLine,
   Search,
+  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react'
@@ -32,6 +33,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useInventory } from '@/hooks/use-inventory'
@@ -53,6 +55,8 @@ type ProductFormState = {
   barcode: string
 }
 
+type ProductSort = 'az' | 'price-desc' | 'price-asc' | 'barcode-desc' | 'barcode-asc'
+
 const emptyForm: ProductFormState = {
   namaBarang: '',
   brand: '',
@@ -61,8 +65,16 @@ const emptyForm: ProductFormState = {
   barcode: '',
 }
 
-const PRODUCTS_PER_PAGE = 24
-const productBrandCollator = new Intl.Collator('id-ID', { sensitivity: 'base' })
+const PRODUCTS_PER_PAGE = 7
+const productTextCollator = new Intl.Collator('id-ID', { numeric: true, sensitivity: 'base' })
+
+const productSortLabels: Record<ProductSort, string> = {
+  az: 'A-Z',
+  'price-desc': 'Harga tertinggi',
+  'price-asc': 'Harga terendah',
+  'barcode-desc': 'Barcode tertinggi',
+  'barcode-asc': 'Barcode terendah',
+}
 
 const scanSourceLabels: Record<ProductScanSuggestion['source'], string> = {
   store: 'Data toko',
@@ -80,6 +92,14 @@ const scanConfidenceLabels: Record<ProductScanSuggestion['confidence'], string> 
 
 function cleanNumber(value: string) {
   return value.replace(/\D/g, '')
+}
+
+function compareProducts(sort: ProductSort, a: Product, b: Product) {
+  if (sort === 'price-desc') return b.harga - a.harga || productTextCollator.compare(a.namaBarang, b.namaBarang)
+  if (sort === 'price-asc') return a.harga - b.harga || productTextCollator.compare(a.namaBarang, b.namaBarang)
+  if (sort === 'barcode-desc') return productTextCollator.compare(b.barcode, a.barcode)
+  if (sort === 'barcode-asc') return productTextCollator.compare(a.barcode, b.barcode)
+  return productTextCollator.compare(a.namaBarang, b.namaBarang) || productTextCollator.compare(a.brand, b.brand)
 }
 
 function productToForm(product: Product): ProductFormState {
@@ -191,6 +211,7 @@ export function ProductsPage() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const deferredSearch = useDeferredValue(search)
+  const [sort, setSort] = useState<ProductSort>('az')
   const [page, setPage] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [formOpen, setFormOpen] = useState(false)
@@ -204,8 +225,8 @@ export function ProductsPage() {
 
   const filteredProducts = useMemo(() => {
     const result = deferredSearch.trim() ? products.filter((product) => matchProduct(product, deferredSearch)) : products
-    return [...result].sort((a, b) => productBrandCollator.compare(a.brand, b.brand))
-  }, [products, deferredSearch])
+    return [...result].sort((a, b) => compareProducts(sort, a, b))
+  }, [products, deferredSearch, sort])
 
   const lastPage = Math.max(0, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE) - 1)
   const visiblePage = Math.min(page, lastPage)
@@ -425,7 +446,7 @@ export function ProductsPage() {
       </div>
 
       <GlassPanel className="p-4" glow="cyan">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto] lg:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/42" />
             <Input
@@ -435,6 +456,19 @@ export function ProductsPage() {
               className="h-11 border-white/12 bg-white/[0.07] pl-10 text-white placeholder:text-white/38"
             />
           </div>
+          <Select value={sort} onValueChange={(value) => { setSort(value as ProductSort); setPage(0) }}>
+            <SelectTrigger aria-label="Urutkan data barang" className="h-11 w-full border-white/12 bg-white/[0.07] text-white">
+              <span className="flex min-w-0 items-center gap-2">
+                <SlidersHorizontal className="size-4 text-cyan-100/70" />
+                <SelectValue placeholder="Urutkan" />
+              </span>
+            </SelectTrigger>
+            <SelectContent align="end">
+              {(Object.entries(productSortLabels) as [ProductSort, string][]).map(([value, label]) => (
+                <SelectItem key={value} value={value}>{label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="flex items-center gap-2 text-sm text-white/56">
             <Badge className="bg-emerald-300/15 text-emerald-100">{formatNumber(products.length)} produk</Badge>
             <Badge className="bg-cyan-300/15 text-cyan-100">{formatNumber(selectedIds.length)} dipilih</Badge>
@@ -449,55 +483,55 @@ export function ProductsPage() {
           </div>
         ) : filteredProducts.length ? (
           <>
-            <div className="hidden max-h-[620px] overflow-auto lg:block">
-              <Table>
+            <div className="hidden max-h-[560px] overflow-auto lg:block">
+              <Table className="text-xs">
                 <TableHeader className="sticky top-0 z-10 bg-[#17213a]/95 backdrop-blur">
-                  <TableRow className="border-white/10 hover:bg-transparent">
-                    <TableHead className="w-12">
+                  <TableRow className="h-9 border-white/10 hover:bg-transparent">
+                    <TableHead className="w-10 px-3 py-2">
                       <Checkbox
                         checked={filteredProducts.length > 0 && filteredProducts.every(product => selectedIdSet.has(product.id))}
                         onCheckedChange={(checked) => handleSelectAll(Boolean(checked))}
                         aria-label="Pilih semua produk"
                       />
                     </TableHead>
-                    <TableHead className="text-white/62">ID</TableHead>
-                    <TableHead className="text-white/62">Nama Barang</TableHead>
-                    <TableHead className="text-white/62">Brand</TableHead>
-                    <TableHead className="text-white/62">Harga</TableHead>
-                    <TableHead className="text-white/62">Stok</TableHead>
-                    <TableHead className="text-right text-white/62">Aksi</TableHead>
+                    <TableHead className="px-3 py-2 text-white/62">ID</TableHead>
+                    <TableHead className="px-3 py-2 text-white/62">Nama Barang</TableHead>
+                    <TableHead className="px-3 py-2 text-white/62">Brand</TableHead>
+                    <TableHead className="px-3 py-2 text-white/62">Harga</TableHead>
+                    <TableHead className="px-3 py-2 text-white/62">Stok</TableHead>
+                    <TableHead className="px-3 py-2 text-right text-white/62">Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {visibleProducts.map((product, index) => (
                     <TableRow
                       key={product.id}
-                      className="border-white/10 transition hover:bg-cyan-300/[0.06]"
+                      className="h-14 border-white/10 transition hover:bg-cyan-300/[0.06]"
+                      style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
                     >
-                      <TableCell>
+                      <TableCell className="px-3 py-2">
                         <Checkbox
                           checked={selectedIdSet.has(product.id)}
                           onCheckedChange={() => toggleSelect(product.id)}
                           aria-label={`Pilih ${product.namaBarang}`}
                         />
                       </TableCell>
-                      <TableCell className="font-mono text-white/58">{visiblePage * PRODUCTS_PER_PAGE + index + 1}</TableCell>
-                      <TableCell>
-                        <p className="font-semibold text-white">{product.namaBarang}</p>
+                      <TableCell className="px-3 py-2 font-mono text-white/58">{visiblePage * PRODUCTS_PER_PAGE + index + 1}</TableCell>
+                      <TableCell className="px-3 py-2">
+                        <p className="text-sm font-semibold leading-tight text-white">{product.namaBarang}</p>
                         <p className="font-mono text-xs text-white/42">{product.barcode}</p>
                       </TableCell>
-                      <TableCell className="text-white/72">{product.brand}</TableCell>
-                      <TableCell>
-                        <p className="text-xs text-white/42">Rp</p>
+                      <TableCell className="px-3 py-2 text-white/72">{product.brand}</TableCell>
+                      <TableCell className="px-3 py-2">
                         <p className="font-mono text-white">{formatCurrency(product.harga).replace('Rp', '')}</p>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-3 py-2">
                         <Badge className={product.stok <= 5 ? 'bg-amber-300/16 text-amber-100' : 'bg-emerald-300/14 text-emerald-100'}>
                           {product.stok}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex gap-2">
+                      <TableCell className="px-3 py-2 text-right">
+                        <div className="inline-flex gap-1.5">
                           <Button type="button" variant="outline" size="icon-sm" aria-label={`Edit ${product.namaBarang}`} onClick={() => openEditForm(product)}>
                             <Edit3 className="size-4" />
                           </Button>
@@ -512,11 +546,12 @@ export function ProductsPage() {
               </Table>
             </div>
 
-            <div className="space-y-3 p-4 lg:hidden">
-              {visibleProducts.map((product) => (
+            <div className="space-y-2.5 p-3 lg:hidden">
+              {visibleProducts.map((product, index) => (
                 <div
                   key={product.id}
-                  className="rounded-xl border border-white/10 bg-white/[0.055] p-4"
+                  className="product-card-compact rounded-lg border border-white/10 bg-white/[0.055] p-3"
+                  style={{ animationDelay: `${Math.min(index, 6) * 45}ms` }}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -525,7 +560,7 @@ export function ProductsPage() {
                     </div>
                     <Checkbox aria-label={`Pilih ${product.namaBarang}`} checked={selectedIdSet.has(product.id)} onCheckedChange={() => toggleSelect(product.id)} />
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <p className="text-white/42">Harga</p>
                       <p className="font-mono text-white">{formatCurrency(product.harga)}</p>
@@ -535,8 +570,8 @@ export function ProductsPage() {
                       <p className="font-mono text-white">{product.stok}</p>
                     </div>
                   </div>
-                  <p className="mt-3 font-mono text-xs text-cyan-100/72">{product.barcode}</p>
-                  <div className="mt-4 flex gap-2">
+                  <p className="mt-2 font-mono text-xs text-cyan-100/72">{product.barcode}</p>
+                  <div className="mt-3 flex gap-2">
                     <Button type="button" variant="outline" className="flex-1" aria-label={`Edit ${product.namaBarang}`} onClick={() => openEditForm(product)}>
                       <Edit3 className="size-4" />
                       Edit
