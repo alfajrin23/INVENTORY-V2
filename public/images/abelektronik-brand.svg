@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 354" role="img" aria-labelledby="title desc">
+<title id="title">ABELEKTRONIK</title>
+<desc id="desc">listrik, sparepart tv, audio, mesin cuci, kulkas dll</desc>
+<defs>
+  <radialGradient id="glow" cx="50%" cy="50%" r="65%">
+    <stop offset="0" stop-color="#1468d8" stop-opacity=".95"/>
+    <stop offset=".42" stop-color="#063b83" stop-opacity=".65"/>
+    <stop offset="1" stop-color="#021329" stop-opacity="1"/>
+  </radialGradient>
+  <pattern id="grid" width="58" height="58" patternUnits="userSpaceOnUse">
+    <path d="M0 29h58M29 0v58" stroke="#0d70c9" stroke-opacity=".22" stroke-width="1"/>
+    <path d="M8 8h18v10h18M15 44h10v-9h25" fill="none" stroke="#19a6ff" stroke-opacity=".18" stroke-width="1"/>
+    <circle cx="8" cy="8" r="1.6" fill="#86d8ff" opacity=".45"/>
+    <circle cx="50" cy="35" r="1.2" fill="#86d8ff" opacity=".35"/>
+  </pattern>
+  <filter id="textGlow" x="-20%" y="-30%" width="140%" height="160%">
+    <feGaussianBlur stdDeviation="2.4" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs>
+<rect width="2048" height="354" fill="#021329"/>
+<rect width="2048" height="354" fill="url(#glow)"/>
+<rect width="2048" height="354" fill="url(#grid)"/>
+<g opacity=".34" stroke="#1e9cff" fill="none">
+  <path d="M0 195h292l80-80h280M2048 195h-292l-80-80h-280" stroke-width="2"/>
+  <path d="M390 0v86h162v50h210M1658 0v86h-162v50h-210" stroke-width="1.3"/>
+  <path d="M0 268h230l60-60h160M2048 268h-230l-60-60h-160" stroke-width="1.5"/>
+</g>
+<g transform="translate(150 44)" fill="none" stroke="#fff" stroke-width="7" stroke-linejoin="round">
+  <path d="M38 86 76 20h56l24 42-24 42H76z"/>
+  <path d="M0 158 38 92h76l38 66-38 66H38z"/>
+  <path d="M38 232 76 166h56l24 42-24 42H76z"/>
+  <path d="M130 20h30l28 48h55l25-44h58"/>
+  <path d="M58 20h58"/>
+</g>
+<g transform="translate(1690 44)" fill="none" stroke="#fff" stroke-width="7" stroke-linejoin="round">
+  <path d="M38 86 76 20h56l24 42-24 42H76z"/>
+  <path d="M0 158 38 92h76l38 66-38 66H38z"/>
+  <path d="M38 232 76 166h56l24 42-24 42H76z"/>
+  <path d="M130 20h30l28 48h55l25-44h58"/>
+  <path d="M58 20h58"/>
+</g>
+<g filter="url(#textGlow)" fill="#fff">
+  <text x="1024" y="190" text-anchor="middle"
+        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="122" font-weight="900" letter-spacing="7">ABELEKTRONIK</text>
+  <g opacity=".62">
+    <rect x="410" y="95" width="104" height="7"/>
+    <rect x="594" y="121" width="148" height="6"/>
+    <rect x="805" y="154" width="92" height="6"/>
+    <rect x="1202" y="102" width="136" height="6"/>
+    <rect x="1414" y="144" width="112" height="6"/>
+  </g>
+</g>
+<text x="1024" y="277" text-anchor="middle" fill="#fff"
+      font-family="Arial, Helvetica, sans-serif" font-size="48" letter-spacing="1">
+  listrik, sparepart tv, audio, mesin cuci, kulkas dll
+</text>
+</svg>
