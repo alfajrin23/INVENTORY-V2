@@ -73,13 +73,20 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
   const [processing, setProcessing] = useState(false)
   const submitLock = useRef(false)
 
-  const commitTransaction = async (cart: CartItem[], kind: TransactionCategory) => {
-    if (submitLock.current) throw new Error('Transaksi sedang diproses')
-    submitLock.current = true
-    try {
-      const created = await processTransaction({ category: kind, items: cart, operator: 'Kasir' })
-      setCreatedHistory(created); setLastItems(cart); setLastCategory(kind)
-    } finally { submitLock.current = false }
+	  const commitTransaction = async (cart: CartItem[], kind: TransactionCategory) => {
+	    if (submitLock.current) throw new Error('Transaksi sedang diproses')
+	    submitLock.current = true
+	    try {
+	      const created = await processTransaction({ category: kind, items: cart, operator: 'Kasir' })
+	      setCreatedHistory(created); setLastItems(cart); setLastCategory(kind)
+	    } finally { submitLock.current = false }
+	  }
+
+  const prepareVoiceCart = async (cart: CartItem[], kind: TransactionCategory) => {
+    setCategory(kind)
+    setItems(cart)
+    setCartOpen(true)
+    showToast('Hasil Voice AI masuk keranjang. Periksa lalu tekan Proses.', 'success')
   }
 
   const total = useMemo(
@@ -161,11 +168,11 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
         <VoiceDialog
           key={activeStore?.id}
           products={products}
-          activeStoreId={activeStore?.id}
-          onClose={() => onVoiceOpenChange(false)}
-          onConfirm={commitTransaction}
-          onCreateProduct={handleVoiceCreateProduct}
-        />
+	          activeStoreId={activeStore?.id}
+	          onClose={() => onVoiceOpenChange(false)}
+	          onConfirm={prepareVoiceCart}
+	          onCreateProduct={handleVoiceCreateProduct}
+	        />
       </Suspense>}
       <ScannerDialog
         open={scannerOpen}
@@ -306,11 +313,11 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
               {createdHistory.length} item tersimpan ke history dan stok sudah diperbarui.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setReceiptOpen(true)}>
-              <Receipt className="size-4" />
-              Lihat Resi
-            </Button>
+	          <DialogFooter>
+	            <Button type="button" variant="outline" className="receipt-action-pulse" onClick={() => setReceiptOpen(true)}>
+	              <Receipt className="size-4" />
+	              Lihat Resi
+	            </Button>
             <Button type="button" variant="outline" onClick={() => printReceiptWindow(activeStore, lastItems, lastCategory)}>
               <Printer className="size-4" />
               Print
@@ -359,8 +366,8 @@ function ReceiptPreview({ items, category }: { items: CartItem[]; category: Tran
   const { activeStore } = useInventory()
   const total = items.reduce((sum, item) => sum + item.product.harga * item.quantity, 0)
 
-  return (
-    <div className="mx-auto w-full max-w-md rounded-xl bg-white p-6 text-slate-950 shadow-2xl">
+	  return (
+	    <div className="receipt-preview-animated mx-auto w-full max-w-md rounded-xl bg-white p-6 text-slate-950 shadow-2xl">
       <div className="text-center">
         <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-950 text-white">
           AB

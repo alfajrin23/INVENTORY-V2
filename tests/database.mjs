@@ -17,7 +17,7 @@ await db.exec(`create role anon; create role authenticated; create schema auth;
   grant usage on schema auth,public to authenticated,anon;
   grant execute on function auth.uid() to authenticated,anon;
   insert into auth.users values('${owner}'),('${other}');`)
-for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql', '003_transaction_revision_audit.sql', '004_performance_tuning.sql', '005_user_profiles.sql']) {
+for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql', '003_transaction_revision_audit.sql', '004_performance_tuning.sql', '005_user_profiles.sql', '20260914024812_fix_transaction_delete_stock_rollback.sql']) {
   await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'))
 }
 await db.exec(`set request.jwt.claim.sub='${owner}'; set role authenticated;
@@ -68,6 +68,12 @@ const changedSale = (await db.query('select id, updated_at from history where id
 await revise(changedSale, revisedSale, true)
 assert.deepEqual(await stock(), [17,2]); assert.equal(await count(),2)
 await assert.rejects(revise(changedSale, revisedSale, true), /tidak ditemukan/)
+await call([{productId:p1,quantity:2}], 'keluar')
+const barcodeLinkedSale = (await db.query("select id, updated_at from history where kategori='keluar' and jumlah=2 order by created_at desc limit 1")).rows[0]
+await db.exec(`reset role; update public.history set product_id = null where id = '${barcodeLinkedSale.id}'; set role authenticated;`)
+const barcodeLinkedSaleAfterNull = (await db.query('select id, updated_at from history where id=$1',[barcodeLinkedSale.id])).rows[0]
+await revise(barcodeLinkedSaleAfterNull, null, true)
+assert.deepEqual(await stock(), [17,2]); assert.equal(await count(),2)
 assert.ok((await db.query("select count(*)::int as n from audit_logs where entity='transaction' and action='delete'")).rows[0].n >= 1)
 await assert.rejects(db.exec(`insert into audit_logs(owner_id,store_id,entity,action,record_id) values('${owner}','${store}','product','insert','${p1}')`), /permission denied/)
 await call([{productId:p1,quantity:16}], 'keluar')

@@ -132,44 +132,121 @@ function productToScanSuggestion(product: Product): ProductScanSuggestion {
   }
 }
 
+const BARCODE_LABEL_WIDTH = 700
+const BARCODE_LABEL_HEIGHT = 280
+
+function safeDownloadName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'barcode'
+}
+
+function downloadCanvas(canvas: HTMLCanvasElement, filename: string) {
+  const link = document.createElement('a')
+  link.download = filename
+  link.href = canvas.toDataURL('image/png')
+  link.rel = 'noopener'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.download = filename
+  link.href = url
+  link.rel = 'noopener'
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
 function drawBarcodeCanvas(product: Product) {
   const canvas = document.createElement('canvas')
-  canvas.width = 700
-  canvas.height = 280
+  canvas.width = BARCODE_LABEL_WIDTH
+  canvas.height = BARCODE_LABEL_HEIGHT
   const context = canvas.getContext('2d')
   if (!context) {
     return canvas
   }
 
+  const barcodeCanvas = document.createElement('canvas')
+  JsBarcode(barcodeCanvas, product.barcode, {
+    format: 'CODE128',
+    width: 2,
+    height: 118,
+    margin: 0,
+    displayValue: true,
+    fontSize: 24,
+    background: '#ffffff',
+    lineColor: '#0f172a',
+  })
+
   context.fillStyle = '#ffffff'
   context.fillRect(0, 0, canvas.width, canvas.height)
   context.fillStyle = '#0f172a'
   context.font = 'bold 28px Arial'
-  context.fillText(`${product.brand} - ${product.namaBarang}`, 28, 42)
+  context.fillText(`${product.brand} - ${product.namaBarang}`, 28, 42, canvas.width - 56)
   context.font = '24px Arial'
-  context.fillText(formatCurrency(product.harga), 28, 76)
-  JsBarcode(canvas, product.barcode, {
-    format: 'CODE128',
-    width: 2,
-    height: 120,
-    marginTop: 96,
-    marginLeft: 24,
-    marginRight: 24,
-    displayValue: true,
-    fontSize: 24,
-  })
+  context.fillText(formatCurrency(product.harga), 28, 76, canvas.width - 56)
+  context.drawImage(barcodeCanvas, 24, 96, canvas.width - 48, 150)
   return canvas
 }
 
-function downloadBarcodePng(product: Product) {
-  const canvas = drawBarcodeCanvas(product)
-  const link = document.createElement('a')
-  link.download = `${product.brand}-${product.namaBarang}-${product.barcode}.png`.replace(/\s+/g, '-')
-  link.href = canvas.toDataURL('image/png')
-  link.click()
+function drawBarcodeSheetCanvas(products: Product[]) {
+  if (products.length === 1) {
+    return drawBarcodeCanvas(products[0])
+  }
+
+  const columns = 2
+  const gap = 24
+  const padding = 24
+  const rows = Math.ceil(products.length / columns)
+  const canvas = document.createElement('canvas')
+  canvas.width = (BARCODE_LABEL_WIDTH * columns) + (gap * (columns - 1)) + (padding * 2)
+  canvas.height = (BARCODE_LABEL_HEIGHT * rows) + (gap * (rows - 1)) + (padding * 2)
+  const context = canvas.getContext('2d')
+  if (!context) {
+    return canvas
+  }
+
+  context.fillStyle = '#f8fafc'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  products.forEach((product, index) => {
+    const label = drawBarcodeCanvas(product)
+    const column = index % columns
+    const row = Math.floor(index / columns)
+    const x = padding + column * (BARCODE_LABEL_WIDTH + gap)
+    const y = padding + row * (BARCODE_LABEL_HEIGHT + gap)
+    context.drawImage(label, x, y)
+  })
+
+  return canvas
+}
+
+function downloadBarcodePng(products: Product[]) {
+  if (!products.length) {
+    throw new Error('Pilih minimal satu produk')
+  }
+
+  const canvas = drawBarcodeSheetCanvas(products)
+  const filename =
+    products.length === 1
+      ? `${safeDownloadName(`${products[0].brand}-${products[0].namaBarang}-${products[0].barcode}`)}.png`
+      : `barcode-abelektronik-${products.length}-produk.png`
+  downloadCanvas(canvas, filename)
 }
 
 async function downloadBarcodePdf(products: Product[]) {
+  if (!products.length) {
+    throw new Error('Pilih minimal satu produk')
+  }
+
   const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF('p', 'mm', 'a4')
   const columns = 4
@@ -199,7 +276,7 @@ async function downloadBarcodePdf(products: Product[]) {
     doc.addImage(canvas.toDataURL('image/png'), 'PNG', x + 2, y + 11, labelWidth - 6, 15)
   })
 
-  doc.save('barcode-abelektronik.pdf')
+  downloadBlob(doc.output('blob'), 'barcode-abelektronik.pdf')
 }
 
 export function ProductsPage() {
@@ -444,6 +521,24 @@ export function ProductsPage() {
     }
 
     setBarcodeOpen(true)
+  }
+
+  const handleDownloadBarcodePng = () => {
+    try {
+      downloadBarcodePng(selectedProducts)
+      showToast(selectedProducts.length > 1 ? 'Sheet barcode PNG disimpan' : 'Barcode PNG disimpan', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Barcode PNG gagal disimpan', 'error')
+    }
+  }
+
+  const handleDownloadBarcodePdf = async () => {
+    try {
+      await downloadBarcodePdf(selectedProducts)
+      showToast('Barcode PDF disimpan', 'success')
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Barcode PDF gagal disimpan', 'error')
+    }
   }
 
   if (error) {
@@ -763,12 +858,12 @@ export function ProductsPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => selectedProducts.forEach((product, index) => window.setTimeout(() => downloadBarcodePng(product), index * 500))}
+              onClick={handleDownloadBarcodePng}
             >
               <Download className="size-4" />
               Save PNG
             </Button>
-            <Button type="button" variant="outline" onClick={() => downloadBarcodePdf(selectedProducts)}>
+            <Button type="button" variant="outline" onClick={() => void handleDownloadBarcodePdf()}>
               <FileText className="size-4" />
               Save PDF
             </Button>

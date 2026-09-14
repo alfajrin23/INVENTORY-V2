@@ -641,8 +641,8 @@ export function VoiceDialog({
                   const items = [...totals].map(([id, quantity]) => ({ product: products.find(product => product.id === id)!, quantity }))
                   await onConfirm(items, transactionCommand.category)
                   if (alive.current) {
-                    setSuccessMessage('Stok dan history berhasil diperbarui.')
-                    setState('success')
+                    setSuccessMessage('Keranjang transaksi siap diperiksa.')
+                    onClose()
                   }
                 } catch (cause) {
                   if (alive.current) {

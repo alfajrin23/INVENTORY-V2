@@ -48,4 +48,28 @@ test.describe('interactive usage guide', () => {
     await page.getByRole('button', { name: 'Tutup Panduan' }).first().click()
     await expect(guide).toBeHidden()
   })
+
+  test('app and usage guide dialogs stay framed in Android-sized viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/pengaturan.html')
+
+    await page.getByRole('button', { name: 'Panduan Penggunaan' }).click()
+    const usageGuide = page.getByTestId('interactive-guide')
+    await expect(usageGuide).toBeVisible()
+    await expect.poll(() => usageGuide.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      return box.left >= -1 && box.top >= -1 && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1
+    })).toBe(true)
+    await page.getByRole('button', { name: 'Tutup Panduan' }).first().click()
+    await expect(usageGuide).toBeHidden()
+
+    await page.getByRole('button', { name: 'Panduan Aplikasi' }).click()
+    const appGuide = page.getByRole('dialog')
+    await expect(appGuide).toContainText('Panduan ABElektronik Inventory')
+    await expect.poll(() => appGuide.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      return box.left >= -1 && box.top >= -1 && box.right <= innerWidth + 1 && box.bottom <= innerHeight + 1
+    })).toBe(true)
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+  })
 })

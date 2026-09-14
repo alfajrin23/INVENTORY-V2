@@ -12,10 +12,11 @@ import {
   Moon,
   Package,
   PackageCheck,
-  PackageMinus,
-  PackagePlus,
-  Printer,
-  ScanLine,
+	  PackageMinus,
+	  PackagePlus,
+	  Printer,
+	  Receipt,
+	  ScanLine,
   Search,
   Settings,
   Sun,
@@ -640,9 +641,10 @@ function PrintDemo() {
         <strong>ABElektronik</strong><span>Charger Samsung 25W × 1</span><b>Rp 249.000</b>
       </div>
       <div className="guide-result-buttons">
-        <button type="button" tabIndex={-1} className="guide-spotlight" data-guide-spotlight="pdf"><FileText /> Save PDF<TapIndicator /></button>
+        <button type="button" tabIndex={-1} className="guide-spotlight guide-receipt-view" data-guide-spotlight="receipt"><Receipt /> Lihat Resi<TapIndicator /></button>
+        <button type="button" tabIndex={-1}><FileText /> Save PDF</button>
         <button type="button" tabIndex={-1}><Printer /> Print Resi</button>
-      </div>
+	      </div>
       <p className="guide-note">Pada halaman laporan, gunakan tombol FileText “Simpan PDF”.</p>
     </div>
   )
