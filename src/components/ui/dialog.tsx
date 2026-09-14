@@ -56,7 +56,8 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
-  const isFullscreenGuide = typeof className === "string" && className.split(/\s+/).includes("guide-dialog-content")
+  const classTokens = typeof className === "string" ? className.split(/\s+/) : []
+  const isFullscreenGuide = classTokens.includes("guide-dialog-content") || classTokens.includes("app-guide-dialog")
 
   return (
     <DialogPortal>
@@ -73,12 +74,17 @@ function DialogContent({
           ...style,
           position: "fixed",
           inset: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
           width: "100%",
           maxWidth: "none",
           height: "100%",
           maxHeight: "none",
           margin: 0,
           transform: "none",
+          translate: "none",
         } : style}
         {...props}
       >
@@ -90,8 +96,7 @@ function DialogContent({
               className="absolute top-2 right-2"
               size="icon-sm"
             >
-              <XIcon
-              />
+              <XIcon />
               <span className="sr-only">Close</span>
             </Button>
           </DialogPrimitive.Close>
