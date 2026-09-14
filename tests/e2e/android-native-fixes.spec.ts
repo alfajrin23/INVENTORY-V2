@@ -43,6 +43,25 @@ test('Android guide fills the WebView instead of being cropped at the reported A
   await expect(appGuide).toContainText('Panduan ABElektronik Inventory')
   await expectFullscreen(page, appGuide)
   await expect.poll(() => appGuide.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+
+  const firstSection = appGuide.locator('.app-guide-section').first()
+  await expect(firstSection).toBeVisible()
+  await expect.poll(() => firstSection.evaluate((element) => {
+    const style = getComputedStyle(element)
+    const box = element.getBoundingClientRect()
+    return {
+      columns: style.gridTemplateColumns.trim().split(/\s+/).length,
+      left: Math.round(box.left),
+      right: Math.round(box.right),
+      viewportWidth: Math.round(innerWidth),
+    }
+  })).toEqual({
+    columns: 1,
+    left: 12,
+    right: 726,
+    viewportWidth: 738,
+  })
+  await page.screenshot({ path: testInfo.outputPath('android-app-guide-738x1600.png'), fullPage: false })
 })
 
 test('Android barcode PNG and PDF are routed to the native Downloads saver', async ({ page }) => {
