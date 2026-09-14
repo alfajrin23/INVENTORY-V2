@@ -1,0 +1,74 @@
+/*
+ * Android WebView can report viewport units differently from a mobile browser.
+ * Do not size guide dialogs with vw/dvw in the APK. Fixed inset + auto width
+ * makes the Radix portal fill the actual WebView content area between system bars.
+ */
+html.is-capacitor-native,
+html.is-capacitor-native body,
+html.is-capacitor-native #root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+html.is-capacitor-native body [data-slot="dialog-content"].guide-dialog-content,
+html.is-capacitor-native body [data-slot="dialog-content"].app-guide-dialog {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  translate: none !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+}
+
+html.is-capacitor-native .guide-shell,
+html.is-capacitor-native .guide-layout,
+html.is-capacitor-native .guide-content,
+html.is-capacitor-native .app-guide-body,
+html.is-capacitor-native .app-guide-section,
+html.is-capacitor-native .guide-hero-panel,
+html.is-capacitor-native .guide-wide-panel {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html.is-capacitor-native .guide-content,
+html.is-capacitor-native .app-guide-body {
+  overflow-x: hidden !important;
+  overscroll-behavior-x: none;
+}
+
+html.is-capacitor-native .guide-screen-stage,
+html.is-capacitor-native .guide-phone,
+html.is-capacitor-native .guide-phone-shot,
+html.is-capacitor-native .guide-scanner-shot {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+html.is-capacitor-native .guide-header,
+html.is-capacitor-native .app-guide-header {
+  padding-top: max(14px, env(safe-area-inset-top)) !important;
+  padding-left: max(12px, env(safe-area-inset-left)) !important;
+  padding-right: max(12px, env(safe-area-inset-right)) !important;
+}
+
+html.is-capacitor-native .guide-footer,
+html.is-capacitor-native .app-guide-footer {
+  padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  padding-left: max(12px, env(safe-area-inset-left)) !important;
+  padding-right: max(12px, env(safe-area-inset-right)) !important;
+}
