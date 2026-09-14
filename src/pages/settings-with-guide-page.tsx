@@ -1,12 +1,30 @@
 import { BookOpen, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { InteractiveGuide } from '@/components/guide/interactive-guide'
 import { GlassPanel } from '@/components/shared/glass-panel'
+import { routes } from '@/lib/navigation'
 import { SettingsPage } from '@/pages/settings-page'
+import { VoiceGuidePage } from '@/pages/voice-guide-page'
 
 export function SettingsWithGuidePage() {
   const [guideOpen, setGuideOpen] = useState(false)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const voiceGuideRequested = new URLSearchParams(location.search).get('guide') === 'voice'
+
+  if (voiceGuideRequested) {
+    return (
+      <VoiceGuidePage
+        onBack={() => navigate(routes.settings, { replace: true })}
+        onOpenFullGuide={() => {
+          navigate(routes.settings, { replace: true })
+          setGuideOpen(true)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="space-y-5">
