@@ -12,7 +12,7 @@ const loadDashboardPage = () => import('@/pages/dashboard-page')
 const loadProductsPage = () => import('@/pages/products-page')
 const loadHistoryPage = () => import('@/pages/history-page')
 const loadReportsHubPage = () => import('@/pages/reports-hub-page')
-const loadSettingsPage = () => import('@/pages/settings-page')
+const loadSettingsPage = () => import('@/pages/settings-with-guide-page')
 const loadLogsInputPage = () => import('@/pages/logs-input-page')
 const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
 const loadReportPages = () => import('@/pages/report-pages')
@@ -21,7 +21,7 @@ const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default
 const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsPage })))
 const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: module.HistoryPage })))
 const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
-const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsPage })))
+const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsWithGuidePage })))
 const LogsInputPage = lazy(() => loadLogsInputPage().then((module) => ({ default: module.LogsInputPage })))
 const ProfileSettingsPage = lazy(() =>
   loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })),
