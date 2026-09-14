@@ -1,17 +1,19 @@
 .guide-dialog-content {
-  inset: 0 !important;
-  top: 0 !important;
-  left: 0 !important;
+  top: max(.5rem, env(safe-area-inset-top)) !important;
+  right: max(.65rem, env(safe-area-inset-right)) !important;
+  bottom: max(.5rem, env(safe-area-inset-bottom)) !important;
+  left: max(.65rem, env(safe-area-inset-left)) !important;
   z-index: 90 !important;
   display: block !important;
-  width: 100vw !important;
-  max-width: 100vw !important;
-  height: 100dvh !important;
-  max-height: 100dvh !important;
+  width: auto !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: none !important;
+  translate: 0 0 !important;
   transform: none !important;
   overflow: hidden !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  border-radius: 24px !important;
   padding: 0 !important;
   background: #f5f8f7 !important;
   color: #163231 !important;
@@ -443,14 +445,16 @@
 
 @media (min-width: 640px) {
   .guide-dialog-content {
-    inset: 4vh auto auto 50% !important;
-    top: 4vh !important;
-    left: 50% !important;
-    width: min(94vw, 1040px) !important;
-    max-width: 1040px !important;
-    height: 92dvh !important;
-    max-height: 92dvh !important;
-    transform: translateX(-50%) !important;
+    top: 4svh !important;
+    right: max(1rem, calc((100svw - 1040px) / 2)) !important;
+    bottom: auto !important;
+    left: max(1rem, calc((100svw - 1040px) / 2)) !important;
+    width: auto !important;
+    max-width: none !important;
+    height: 92svh !important;
+    max-height: 92svh !important;
+    translate: 0 0 !important;
+    transform: none !important;
     border: 1px solid rgba(15,118,110,.13) !important;
     border-radius: 26px !important;
     box-shadow: 0 30px 90px rgba(10,35,32,.28) !important;

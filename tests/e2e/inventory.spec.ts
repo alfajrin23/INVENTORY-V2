@@ -240,6 +240,18 @@ test('mobile bottom navigation and desktop navigation', async ({ page }) => {
   await expect(page.getByRole('heading',{name:'History Barang'})).toBeVisible()
 })
 
+test('settings guide explains search, dropdown, chart, scanner and voice', async ({ page }) => {
+  await page.setViewportSize({width:390,height:844}); await page.goto('/pengaturan.html')
+  await page.getByRole('button',{name:/Panduan aplikasi/}).click()
+  await expect(page.getByRole('heading',{name:'Panduan ABElektronik Inventory'})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Search dipakai/})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Dropdown mengatur/})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Grafik dashboard/})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Scanner dipakai/})).toBeVisible()
+  await expect(page.getByRole('heading',{name:/Barang masuk menambah stok/})).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
 test('add, edit, barcode export, search, delete product', async ({ page }) => {
   await page.setViewportSize({width:390,height:844}); await page.goto('/databarang.html')
   await page.getByRole('button',{name:'Tambah barang',exact:true}).click()

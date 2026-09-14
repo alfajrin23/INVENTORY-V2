@@ -436,12 +436,12 @@ function GuideScreen({ scene, mode }: { scene: GuideScene; mode: 'locate' | 'dem
     if (scene === 'print' && mode === 'demo') return <PrintDemo />
     if (scene === 'voice' && mode === 'demo') return <VoiceDemo phase={voicePhase} />
     if (scene === 'reports' && mode === 'demo') return <ReportsHubPreview />
-    if (scene === 'settings' && mode === 'demo') return <SettingsPreview highlight="guide" />
+    if (scene === 'settings' && mode === 'demo') return <SettingsPreview highlight="guide" annotate={false} />
     if (scene === 'products' && mode === 'demo') return <ProductsPreview target="product-actions" />
-    if (scene === 'chart') return <DashboardPreview target="chart" />
+    if (scene === 'chart') return <DashboardPreview target="chart" annotate={mode === 'locate'} />
     if (scene === 'dashboard') return <DashboardPreview target={mode === 'locate' ? 'home' : 'summary'} />
-    if (scene === 'search') return <ProductsPreview target="search" />
-    if (scene === 'scanner') return <ProductsPreview target="scanner" />
+    if (scene === 'search') return <ProductsPreview target="search" annotate={mode === 'locate'} />
+    if (scene === 'scanner') return <ProductsPreview target="scanner" annotate={mode === 'locate'} />
     if (scene === 'products') return <ProductsPreview target={mode === 'locate' ? 'products-nav' : 'product-actions'} />
     if (scene === 'transaction') return <DashboardPreview target="transactions" />
     if (scene === 'reports') return <DashboardPreview target="reports-nav" />
@@ -460,10 +460,12 @@ function PhoneFrame({
   children,
   target = 'none',
   navPulse = 0,
+  annotate = true,
 }: {
   children: ReactNode
   target?: NavTarget
   navPulse?: number
+  annotate?: boolean
 }) {
   const navItems = [
     { label: 'Home', icon: Home, key: 'home' as const },
@@ -485,7 +487,7 @@ function PhoneFrame({
             <div
               key={item.label}
               className={cn('guide-phone-nav-item', item.voice && 'is-voice', highlighted && 'guide-spotlight')}
-              data-guide-spotlight={highlighted ? item.key : undefined}
+              data-guide-spotlight={annotate && highlighted ? item.key : undefined}
             >
               <span><Icon /></span>
               <small>{item.label}</small>
@@ -501,18 +503,20 @@ function PhoneFrame({
 function DashboardPreview({
   target,
   navPulse = 0,
+  annotate = true,
 }: {
   target: 'navigation' | 'home' | 'summary' | 'chart' | 'transactions' | 'reports-nav' | 'voice-nav' | 'settings-nav'
   navPulse?: number
+  annotate?: boolean
 }) {
   const navTarget: NavTarget = ['navigation', 'home', 'reports-nav', 'voice-nav', 'settings-nav'].includes(target)
     ? target as NavTarget
     : 'home'
 
   return (
-    <PhoneFrame target={navTarget} navPulse={navPulse}>
+    <PhoneFrame target={navTarget} navPulse={navPulse} annotate={annotate}>
       <div className="guide-mini-heading"><div><strong>Ringkasan toko</strong><small>Senin, 14 September</small></div><span>Hari ini</span></div>
-      <div className={cn('guide-revenue-card', target === 'summary' && 'guide-spotlight')} data-guide-spotlight={target === 'summary' ? 'summary' : undefined}>
+      <div className={cn('guide-revenue-card', target === 'summary' && 'guide-spotlight')} data-guide-spotlight={annotate && target === 'summary' ? 'summary' : undefined}>
         <small>Pendapatan hari ini</small><strong>Rp 2.450.000</strong><span><TrendingUp /> +8,2% dibanding kemarin</span>
       </div>
       <div className="guide-metrics">
@@ -520,14 +524,14 @@ function DashboardPreview({
         <div><CreditCard /><span>Transaksi</span><strong>24</strong></div>
         <div><Bell /><span>Stok rendah</span><strong>5</strong></div>
       </div>
-      <div className={cn('guide-quick-actions', target === 'transactions' && 'guide-spotlight')} data-guide-spotlight={target === 'transactions' ? 'transactions' : undefined}>
+      <div className={cn('guide-quick-actions', target === 'transactions' && 'guide-spotlight')} data-guide-spotlight={annotate && target === 'transactions' ? 'transactions' : undefined}>
         <div><span className="incoming"><PackagePlus /></span><small>Masuk</small></div>
         <div><span className="outgoing"><PackageMinus /></span><small>Keluar</small></div>
         <div><span><ScanLine /></span><small>Scan</small></div>
         <div><span><Package /></span><small>Tambah</small></div>
         {target === 'transactions' && <TapIndicator />}
       </div>
-      <div className={cn('guide-chart-card', target === 'chart' && 'guide-spotlight')} data-guide-spotlight={target === 'chart' ? 'chart' : undefined}>
+      <div className={cn('guide-chart-card', target === 'chart' && 'guide-spotlight')} data-guide-spotlight={annotate && target === 'chart' ? 'chart' : undefined}>
         <div><strong>Pendapatan 7 hari</strong><small>Detail</small></div>
         <b>Rp 8.720.000</b>
         <div className="guide-bars">{[42, 58, 35, 76, 54, 88, 66].map((height, index) => <i key={index} style={{ '--guide-bar': `${height}%` } as CSSProperties} />)}</div>
@@ -537,13 +541,13 @@ function DashboardPreview({
   )
 }
 
-function ProductsPreview({ target }: { target: 'search' | 'scanner' | 'products-nav' | 'product-actions' }) {
+function ProductsPreview({ target, annotate = true }: { target: 'search' | 'scanner' | 'products-nav' | 'product-actions'; annotate?: boolean }) {
   return (
-    <PhoneFrame target={target === 'products-nav' ? 'products-nav' : 'products-nav'}>
+    <PhoneFrame target={target === 'products-nav' ? 'products-nav' : 'products-nav'} annotate={annotate}>
       <div className="guide-mini-heading"><div><strong>Data barang</strong><small>Cari cepat, kelola lebih mudah.</small></div><span>+</span></div>
       <div
         className={cn('guide-search-preview', target === 'search' && 'guide-spotlight')}
-        data-guide-spotlight={target === 'search' ? 'search' : undefined}
+        data-guide-spotlight={annotate && target === 'search' ? 'search' : undefined}
       >
         <Search />
         <span className={target === 'search' ? 'guide-type-text' : ''}>Nama, merek, atau barcode</span>
@@ -552,7 +556,7 @@ function ProductsPreview({ target }: { target: 'search' | 'scanner' | 'products-
           tabIndex={-1}
           aria-hidden="true"
           className={cn(target === 'scanner' && 'guide-inner-target guide-spotlight')}
-          data-guide-spotlight={target === 'scanner' ? 'scanner' : undefined}
+          data-guide-spotlight={annotate && target === 'scanner' ? 'scanner' : undefined}
         >
           <ScanLine />
           {target === 'scanner' && <TapIndicator />}
@@ -564,7 +568,7 @@ function ProductsPreview({ target }: { target: 'search' | 'scanner' | 'products-
       <div className="guide-product-card">
         <div><span><Package /></span><div><strong>Charger Samsung 25W</strong><small>Samsung · 8991234567890</small></div></div>
         <div><strong>Rp 249.000</strong><span>Aman · 18 unit</span></div>
-        <div className={cn(target === 'product-actions' && 'guide-spotlight')} data-guide-spotlight={target === 'product-actions' ? 'product-actions' : undefined}>
+        <div className={cn(target === 'product-actions' && 'guide-spotlight')} data-guide-spotlight={annotate && target === 'product-actions' ? 'product-actions' : undefined}>
           <button type="button" tabIndex={-1}><PackagePlus /> Masuk</button>
           <button type="button" tabIndex={-1}><PackageMinus /> Keluar</button>
           {target === 'product-actions' && <TapIndicator />}
@@ -668,9 +672,9 @@ function VoiceDemo({ phase }: { phase: number }) {
   )
 }
 
-function SettingsPreview({ highlight }: { highlight: 'guide' }) {
+function SettingsPreview({ highlight, annotate = true }: { highlight: 'guide'; annotate?: boolean }) {
   return (
-    <PhoneFrame target="settings-nav">
+    <PhoneFrame target="settings-nav" annotate={annotate}>
       <div className="guide-mini-heading"><div><strong>Pengaturan</strong><small>Sesuai cara kamu kerja.</small></div></div>
       <p className="guide-mini-label">TAMPILAN</p>
       <div className="guide-theme-preview"><span><Sun /> Terang</span><span><Moon /> Gelap</span></div>
@@ -678,7 +682,7 @@ function SettingsPreview({ highlight }: { highlight: 'guide' }) {
       <div className="guide-settings-list">
         <div><Bell /><span><strong>Notifikasi Android</strong><small>Ringkasan stok di panel notifikasi</small></span><ChevronRight /></div>
         <div><UserCog /><span><strong>Pengaturan akun</strong><small>Email & kata sandi</small></span><ChevronRight /></div>
-        <div className={cn(highlight === 'guide' && 'guide-spotlight')} data-guide-spotlight="guide-menu">
+        <div className={cn(highlight === 'guide' && 'guide-spotlight')} data-guide-spotlight={annotate ? 'guide-menu' : undefined}>
           <BookOpen /><span><strong>Panduan Penggunaan</strong><small>Tur visual fitur dan tombol aplikasi</small></span><ChevronRight />{highlight === 'guide' && <TapIndicator />}
         </div>
       </div>
