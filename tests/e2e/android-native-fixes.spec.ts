@@ -1,6 +1,8 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
-async function expectFullscreen(page: Page, locator: ReturnType<Page['locator']>) {
+async function expectFullscreen(page: Page, locator: Locator) {
+  const expected = await page.evaluate(() => ({ width: Math.round(innerWidth), height: Math.round(innerHeight) }))
+
   await expect.poll(async () => locator.evaluate((element) => {
     const box = element.getBoundingClientRect()
     return {
@@ -10,23 +12,19 @@ async function expectFullscreen(page: Page, locator: ReturnType<Page['locator']>
       bottom: Math.round(box.bottom),
       width: Math.round(box.width),
       height: Math.round(box.height),
-      viewportWidth: Math.round(innerWidth),
-      viewportHeight: Math.round(innerHeight),
     }
   })).toEqual({
     left: 0,
     top: 0,
-    right: 740,
-    bottom: 1600,
-    width: 740,
-    height: 1600,
-    viewportWidth: 740,
-    viewportHeight: 1600,
+    right: expected.width,
+    bottom: expected.height,
+    width: expected.width,
+    height: expected.height,
   })
 }
 
-test('Android guide fills the WebView instead of being cropped at tablet-density width', async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 740, height: 1600 })
+test('Android guide fills the WebView instead of being cropped at the reported APK viewport', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 738, height: 1600 })
   await page.goto('/pengaturan.html')
   await page.evaluate(() => document.documentElement.classList.add('is-capacitor-native'))
 
@@ -35,7 +33,7 @@ test('Android guide fills the WebView instead of being cropped at tablet-density
   await expect(usageGuide).toBeVisible()
   await expectFullscreen(page, usageGuide)
   await expect.poll(() => usageGuide.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath('android-guide-740x1600.png'), fullPage: false })
+  await page.screenshot({ path: testInfo.outputPath('android-guide-738x1600.png'), fullPage: false })
 
   await page.getByRole('button', { name: 'Tutup Panduan' }).first().click()
   await expect(usageGuide).toBeHidden()
