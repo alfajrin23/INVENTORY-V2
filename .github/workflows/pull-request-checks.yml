@@ -36,8 +36,8 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Android back and updater regression tests
-        run: npx playwright test tests/e2e/android-back-update.spec.ts
+      - name: Android navigation, updater, and restock regression tests
+        run: npx playwright test tests/e2e/android-back-update.spec.ts tests/e2e/restock-recommendations.spec.ts
 
       - name: Sync Capacitor Android
         run: npx cap sync android
