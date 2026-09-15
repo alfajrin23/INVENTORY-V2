@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
+import { AndroidBackHandler } from '@/components/android-back-handler'
+import { AppUpdatePrompt } from '@/components/app-update-prompt'
 import { AuthGate } from '@/components/auth-gate'
 import { AppShell } from '@/components/layout/app-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -74,6 +76,8 @@ function App() {
         <ToastProvider>
           <AuthGate><InventoryProvider>
             <RoutePreloader />
+            <AndroidBackHandler />
+            <AppUpdatePrompt />
             <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman...</div>}>
               <Routes>
                 <Route element={<AppShell />}>
