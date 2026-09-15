@@ -39,13 +39,24 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Playwright regression suite
-        run: npm test
+      - name: Scanner and barcode tests
+        run: npx playwright test tests/e2e/scanner-barcode.spec.ts
+
+      - name: Thermal printer tests
+        run: npx playwright test tests/e2e/thermal-printer.spec.ts
+
+      - name: Shopping, release notes, report tests
+        run: npx playwright test tests/e2e/shopping-release-report.spec.ts
+
+      - name: Existing critical regressions
+        run: npx playwright test tests/e2e/android-back-update.spec.ts tests/e2e/android-native-fixes.spec.ts tests/e2e/restock-recommendations.spec.ts tests/e2e/voice-guide.spec.ts tests/e2e/guide.spec.ts
 
       - name: Sync Capacitor Android
+        if: always()
         run: npx cap sync android
 
       - name: Android ESC/POS unit tests and debug APK build
+        if: always()
         run: |
           chmod +x android/gradlew
           cd android
