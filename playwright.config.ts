@@ -7,7 +7,7 @@ const releaseNotesSeen = {
 
 export default defineConfig({
   testDir: './tests/e2e', timeout: 30000, expect: { timeout: 7000 },
-  fullyParallel: true, workers: 3,
+  fullyParallel: true, workers: process.env.CI ? 1 : 3,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: 'http://127.0.0.1:5173',
