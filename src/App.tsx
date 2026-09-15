@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
+import { AndroidBackHandler } from '@/components/android-back-handler'
+import { AppUpdatePrompt } from '@/components/app-update-prompt'
 import { AuthGate } from '@/components/auth-gate'
 import { AppShell } from '@/components/layout/app-shell'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -16,6 +18,7 @@ const loadSettingsPage = () => import('@/pages/settings-with-guide-page')
 const loadLogsInputPage = () => import('@/pages/logs-input-page')
 const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
 const loadReportPages = () => import('@/pages/report-pages')
+const loadOutgoingReportPage = () => import('@/pages/outgoing-report-page')
 
 const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
 const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsPage })))
@@ -27,7 +30,7 @@ const ProfileSettingsPage = lazy(() =>
   loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })),
 )
 const IncomingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.IncomingReportPage })))
-const OutgoingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.OutgoingReportPage })))
+const OutgoingReportPage = lazy(() => loadOutgoingReportPage().then((module) => ({ default: module.OutgoingReportPage })))
 const StockReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.StockReportPage })))
 const RevenueAnnualPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueAnnualPage })))
 const RevenueDailyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueDailyPage })))
@@ -51,6 +54,7 @@ function RoutePreloader() {
         loadProductsPage(),
         loadHistoryPage(),
         loadReportsHubPage(),
+        loadOutgoingReportPage(),
       ])
     }
 
@@ -74,6 +78,8 @@ function App() {
         <ToastProvider>
           <AuthGate><InventoryProvider>
             <RoutePreloader />
+            <AndroidBackHandler />
+            <AppUpdatePrompt />
             <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman...</div>}>
               <Routes>
                 <Route element={<AppShell />}>

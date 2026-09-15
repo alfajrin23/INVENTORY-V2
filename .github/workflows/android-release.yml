@@ -1,0 +1,84 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare signing and version
+        env:
+          KEYSTORE_BASE64: ${{ secrets.AB_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.AB_RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.AB_RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.AB_RELEASE_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || (echo "AB_RELEASE_KEYSTORE_BASE64 belum di-set" && exit 1)
+          test -n "$STORE_PASSWORD" || (echo "AB_RELEASE_STORE_PASSWORD belum di-set" && exit 1)
+          test -n "$KEY_ALIAS" || (echo "AB_RELEASE_KEY_ALIAS belum di-set" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "AB_RELEASE_KEY_PASSWORD belum di-set" && exit 1)
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ab-release.keystore"
+          echo "AB_RELEASE_STORE_FILE=$RUNNER_TEMP/ab-release.keystore" >> "$GITHUB_ENV"
+          echo "AB_RELEASE_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "AB_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "AB_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          echo "AB_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "AB_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+
+      - name: Build web and sync Capacitor
+        run: |
+          npm run build
+          npx cap sync android
+
+      - name: Build signed APK
+        run: |
+          chmod +x android/gradlew
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release.apk release/ABElektronik-Inventory.apk
+          cd release
+          sha256sum ABElektronik-Inventory.apk > ABElektronik-Inventory.apk.sha256
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          extra_args=""
+          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
+            extra_args="--prerelease"
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            release/ABElektronik-Inventory.apk \
+            release/ABElektronik-Inventory.apk.sha256 \
+            --verify-tag \
+            --title "ABElektronik Inventory ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            $extra_args

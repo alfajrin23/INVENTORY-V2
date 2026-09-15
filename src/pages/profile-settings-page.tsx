@@ -18,8 +18,10 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useBrandingPhoto } from '@/hooks/use-branding-photo'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
+import { uploadStorePhoto, validateImageFile } from '@/lib/media-storage'
 import { routes } from '@/lib/navigation'
 import type { StoreInput, StoreRecord } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -36,9 +38,7 @@ const emptyStoreForm: StoreFormState = {
 function fileToDataUrl(file: File, onLoaded: (value: string) => void) {
   const reader = new FileReader()
   reader.onload = () => {
-    if (typeof reader.result === 'string') {
-      onLoaded(reader.result)
-    }
+    if (typeof reader.result === 'string') onLoaded(reader.result)
   }
   reader.readAsDataURL(file)
 }
@@ -56,39 +56,47 @@ export function ProfileSettingsPage() {
     deleteStore,
   } = useInventory()
   const { showToast } = useToast()
-  const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem('profilePhoto') ?? '')
+  const { photo: profilePhoto, updatePhoto: updateProfilePhoto } = useBrandingPhoto()
   const [storeDialogOpen, setStoreDialogOpen] = useState(false)
   const [editingStore, setEditingStore] = useState<StoreRecord | null>(null)
   const [storeForm, setStoreForm] = useState<StoreFormState>(emptyStoreForm)
+  const [storePhotoFile, setStorePhotoFile] = useState<File | null>(null)
+  const [storePhotoPreview, setStorePhotoPreview] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const handleProfilePhoto = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleProfilePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file && (!file.type.startsWith('image/') || file.size > 1024 * 1024)) { showToast('Gunakan gambar maksimal 1 MB', 'error'); return }
-    if (!file) {
-      return
-    }
+    event.target.value = ''
+    if (!file) return
 
-    fileToDataUrl(file, (value) => {
-      setProfilePhoto(value)
-      localStorage.setItem('profilePhoto', value)
-      showToast('Foto profil diperbarui', 'success')
-    })
+    try {
+      validateImageFile(file)
+      await updateProfilePhoto(file)
+      showToast('Foto profil tersimpan dan tersinkron ke semua user', 'success')
+    } catch (photoError) {
+      showToast(photoError instanceof Error ? photoError.message : 'Foto profil gagal disimpan', 'error')
+    }
   }
 
   const handleStorePhoto = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (file && (!file.type.startsWith('image/') || file.size > 1024 * 1024)) { showToast('Gunakan gambar maksimal 1 MB', 'error'); return }
-    if (!file) {
-      return
-    }
+    event.target.value = ''
+    if (!file) return
 
-    fileToDataUrl(file, (value) => setStoreForm((current) => ({ ...current, photo: value })))
+    try {
+      validateImageFile(file)
+      setStorePhotoFile(file)
+      fileToDataUrl(file, setStorePhotoPreview)
+    } catch (photoError) {
+      showToast(photoError instanceof Error ? photoError.message : 'Foto toko tidak valid', 'error')
+    }
   }
 
   const openAddStore = () => {
     setEditingStore(null)
     setStoreForm(emptyStoreForm)
+    setStorePhotoFile(null)
+    setStorePhotoPreview('')
     setStoreDialogOpen(true)
   }
 
@@ -100,22 +108,15 @@ export function ProfileSettingsPage() {
       addressLink: store.addressLink,
       photo: store.photo ?? '',
     })
+    setStorePhotoFile(null)
+    setStorePhotoPreview(store.photo ?? '')
     setStoreDialogOpen(true)
   }
 
   const validateStore = () => {
-    if (!storeForm.name.trim()) {
-      return 'Nama toko wajib diisi'
-    }
-
-    if (!storeForm.address.trim()) {
-      return 'Alamat toko wajib diisi'
-    }
-
-    if (!/^https?:\/\/.+/.test(storeForm.addressLink.trim())) {
-      return 'Link lokasi harus diawali http:// atau https://'
-    }
-
+    if (!storeForm.name.trim()) return 'Nama toko wajib diisi'
+    if (!storeForm.address.trim()) return 'Alamat toko wajib diisi'
+    if (!/^https?:\/\/.+/.test(storeForm.addressLink.trim())) return 'Link lokasi harus diawali http:// atau https://'
     return ''
   }
 
@@ -129,7 +130,7 @@ export function ProfileSettingsPage() {
 
     setSaving(true)
     try {
-      const payload: StoreInput = {
+      const basePayload: StoreInput = {
         name: storeForm.name.trim(),
         address: storeForm.address.trim(),
         addressLink: storeForm.addressLink.trim(),
@@ -137,15 +138,21 @@ export function ProfileSettingsPage() {
       }
 
       if (editingStore) {
-        await updateStore(editingStore.id, payload)
+        const photo = storePhotoFile
+          ? await uploadStorePhoto(editingStore.id, storePhotoFile)
+          : basePayload.photo
+        await updateStore(editingStore.id, { ...basePayload, photo })
         showToast('Toko diperbarui', 'success')
       } else {
-        const created = await addStore(payload)
-        // addStore already selects and loads the new store.
-        void created
+        const created = await addStore({ ...basePayload, photo: '' })
+        if (storePhotoFile) {
+          const photo = await uploadStorePhoto(created.id, storePhotoFile)
+          await updateStore(created.id, { ...basePayload, photo })
+        }
         showToast('Toko baru dibuat', 'success')
       }
 
+      setStorePhotoFile(null)
       setStoreDialogOpen(false)
     } catch (storeError) {
       const message = storeError instanceof Error ? storeError.message : 'Toko gagal disimpan'
@@ -165,17 +172,13 @@ export function ProfileSettingsPage() {
 
   const removeStore = async (store: StoreRecord) => {
     const confirmed = window.confirm(`Hapus toko ${store.name}?`)
-    if (!confirmed) {
-      return
-    }
+    if (!confirmed) return
 
     try { await deleteStore(store.id); showToast('Toko dihapus', 'success') }
     catch (e) { showToast(e instanceof Error ? e.message : 'Toko gagal dihapus', 'error') }
   }
 
-  if (error) {
-    return <ErrorState message={error} onRetry={() => void refresh()} />
-  }
+  if (error) return <ErrorState message={error} onRetry={() => void refresh()} />
 
   return (
     <div className="space-y-5">
@@ -194,7 +197,7 @@ export function ProfileSettingsPage() {
               </Avatar>
               <label className="absolute -bottom-1 -right-1 flex size-9 cursor-pointer items-center justify-center rounded-full bg-cyan-300 text-slate-950 shadow-lg">
                 <Camera className="size-4" />
-                <input type="file" accept="image/*" className="sr-only" onChange={handleProfilePhoto} />
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => void handleProfilePhoto(event)} />
               </label>
             </div>
             <div className="min-w-0">
@@ -286,7 +289,7 @@ export function ProfileSettingsPage() {
 
           <div className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/[0.055] p-4">
             <Avatar className="size-16 border border-white/12">
-              <AvatarImage src={storeForm.photo} />
+              <AvatarImage src={storePhotoPreview || storeForm.photo} />
               <AvatarFallback className="bg-cyan-300/12 text-cyan-100">
                 <Store className="size-6" />
               </AvatarFallback>
@@ -294,7 +297,7 @@ export function ProfileSettingsPage() {
             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/12 bg-white/[0.07] px-3 py-2 text-sm text-white transition hover:bg-white/12">
               <Upload className="size-4" />
               Upload Avatar
-              <input type="file" accept="image/*" className="sr-only" onChange={handleStorePhoto} />
+              <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={handleStorePhoto} />
             </label>
           </div>
 

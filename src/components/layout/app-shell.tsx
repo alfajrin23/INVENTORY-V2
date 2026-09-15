@@ -29,6 +29,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useBrandingPhoto } from '@/hooks/use-branding-photo'
 import { useInventory } from '@/hooks/use-inventory'
 import { useThemeMode } from '@/hooks/use-theme-mode'
 import { useToast } from '@/hooks/use-toast'
@@ -52,6 +53,7 @@ export function AppShell() {
   const reduceMotion = useReducedMotion()
   const { activeStore, stores, products, history, loading, mode, setActiveStore } = useInventory()
   const { showToast } = useToast()
+  const { photo: profilePhoto } = useBrandingPhoto()
   const [scanOpen, setScanOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [notificationReady, setNotificationReady] = useState(false)
@@ -70,7 +72,6 @@ export function AppShell() {
     }
   }, [showToast])
   const [search, setSearch] = useState('')
-  const profilePhoto = typeof window !== 'undefined' ? localStorage.getItem('profilePhoto') : ''
   const groupedNav = useMemo(
     () => ({
       utama: navigationItems.filter((item) => item.group === 'utama'),
@@ -250,7 +251,7 @@ export function AppShell() {
             className="rounded-full outline-none ring-cyan-200/40 transition hover:ring-4"
           >
             <Avatar className="size-10">
-              <AvatarImage src={profilePhoto ?? undefined} />
+              <AvatarImage src={profilePhoto || activeStore?.photo || undefined} />
               <AvatarFallback className="bg-cyan-300 text-slate-950">AB</AvatarFallback>
             </Avatar>
           </button>

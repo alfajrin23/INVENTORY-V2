@@ -89,6 +89,13 @@ function DialogContent({
         {...props}
       >
         {children}
+        <DialogPrimitive.Close
+          data-android-back-close
+          className="sr-only"
+          aria-label="Tutup dialog"
+        >
+          Tutup dialog
+        </DialogPrimitive.Close>
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
             <Button

@@ -1,14 +1,34 @@
 apply plugin: 'com.android.application'
 
+def appVersionCode = (System.getenv('AB_VERSION_CODE') ?: '4').toInteger()
+def appVersionName = System.getenv('AB_VERSION_NAME') ?: '1.2.0'
+def releaseStoreFile = System.getenv('AB_RELEASE_STORE_FILE')
+def releaseStorePassword = System.getenv('AB_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = System.getenv('AB_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('AB_RELEASE_KEY_PASSWORD')
+def hasReleaseSigning = [releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword].every { it != null && !it.trim().isEmpty() }
+
 android {
     namespace = "com.abelektronik.inventory"
     compileSdk = rootProject.ext.compileSdkVersion
+
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
     defaultConfig {
         applicationId "com.abelektronik.inventory"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 3
-        versionName "1.1.0-beta.2"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -18,6 +38,9 @@ android {
     }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
