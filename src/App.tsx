@@ -18,6 +18,7 @@ const loadSettingsPage = () => import('@/pages/settings-with-guide-page')
 const loadLogsInputPage = () => import('@/pages/logs-input-page')
 const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
 const loadReportPages = () => import('@/pages/report-pages')
+const loadOutgoingReportPage = () => import('@/pages/outgoing-report-page')
 
 const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
 const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsPage })))
@@ -29,7 +30,7 @@ const ProfileSettingsPage = lazy(() =>
   loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })),
 )
 const IncomingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.IncomingReportPage })))
-const OutgoingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.OutgoingReportPage })))
+const OutgoingReportPage = lazy(() => loadOutgoingReportPage().then((module) => ({ default: module.OutgoingReportPage })))
 const StockReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.StockReportPage })))
 const RevenueAnnualPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueAnnualPage })))
 const RevenueDailyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueDailyPage })))
@@ -53,6 +54,7 @@ function RoutePreloader() {
         loadProductsPage(),
         loadHistoryPage(),
         loadReportsHubPage(),
+        loadOutgoingReportPage(),
       ])
     }
 
