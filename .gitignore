@@ -34,3 +34,6 @@ backups/
 .codegraph/
 .android-toolchain/
 release/*.apk
+release/*.sha256
+*.keystore
+*.jks
