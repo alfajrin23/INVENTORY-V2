@@ -76,9 +76,9 @@ function App() {
     <BrowserRouter>
       <TooltipProvider>
         <ToastProvider>
+          <AndroidBackHandler />
           <AuthGate><InventoryProvider>
             <RoutePreloader />
-            <AndroidBackHandler />
             <AppUpdatePrompt />
             <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman...</div>}>
               <Routes>
