@@ -12,7 +12,8 @@
     "test:db": "node tests/database.mjs",
     "cap:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
-    "android:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1"
+    "android:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-android-apk.ps1",
+    "android:update-apk": "powershell -ExecutionPolicy Bypass -File scripts/build-android-update.ps1"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.1",
