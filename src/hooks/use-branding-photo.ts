@@ -6,8 +6,8 @@ const BRANDING_EVENT = 'ab:branding-photo-changed'
 let cachedPhoto: string | null = null
 let pendingFetch: Promise<string> | null = null
 
-async function loadBrandingPhoto() {
-  if (cachedPhoto !== null) return cachedPhoto
+async function loadBrandingPhoto(force = false) {
+  if (!force && cachedPhoto !== null) return cachedPhoto
   if (!pendingFetch) {
     pendingFetch = fetchBrandingPhoto()
       .then(value => {
@@ -24,19 +24,32 @@ export function useBrandingPhoto() {
 
   useEffect(() => {
     let active = true
-    void loadBrandingPhoto().then(value => {
-      if (active) setPhoto(value)
-    }).catch(() => undefined)
+    const syncFromServer = (force = false) => {
+      void loadBrandingPhoto(force).then(value => {
+        if (active) setPhoto(value)
+      }).catch(() => undefined)
+    }
+
+    syncFromServer()
 
     const onBrandingChanged = (event: Event) => {
       const nextPhoto = (event as CustomEvent<string>).detail ?? ''
       cachedPhoto = nextPhoto
       setPhoto(nextPhoto)
     }
+    const onFocus = () => syncFromServer(true)
+    const onVisibilityChange = () => {
+      if (!document.hidden) syncFromServer(true)
+    }
+
     window.addEventListener(BRANDING_EVENT, onBrandingChanged)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       active = false
       window.removeEventListener(BRANDING_EVENT, onBrandingChanged)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
 
@@ -48,8 +61,7 @@ export function useBrandingPhoto() {
   }
 
   const refreshPhoto = async () => {
-    cachedPhoto = null
-    const nextPhoto = await loadBrandingPhoto()
+    const nextPhoto = await loadBrandingPhoto(true)
     window.dispatchEvent(new CustomEvent<string>(BRANDING_EVENT, { detail: nextPhoto }))
     return nextPhoto
   }
