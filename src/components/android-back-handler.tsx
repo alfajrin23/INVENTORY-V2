@@ -22,6 +22,10 @@ const FALLBACK_PARENT: Record<string, string> = {
   [routes.settings]: routes.dashboard,
 }
 
+type NativeBackWindow = Window & {
+  __abHandleNativeBack?: () => void
+}
+
 function closeTopDialog() {
   const dialogs = Array.from(
     document.querySelectorAll<HTMLElement>('[data-slot="dialog-content"][data-state="open"]'),
@@ -82,8 +86,16 @@ export function AndroidBackHandler() {
       showToast('Tekan tombol kembali sekali lagi untuk keluar', 'success')
     }
 
+    const nativeWindow = window as NativeBackWindow
+    nativeWindow.__abHandleNativeBack = onNativeBack
     window.addEventListener('ab:native-back', onNativeBack)
-    return () => window.removeEventListener('ab:native-back', onNativeBack)
+
+    return () => {
+      window.removeEventListener('ab:native-back', onNativeBack)
+      if (nativeWindow.__abHandleNativeBack === onNativeBack) {
+        delete nativeWindow.__abHandleNativeBack
+      }
+    }
   }, [navigate, showToast])
 
   return null
