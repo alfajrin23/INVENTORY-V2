@@ -187,6 +187,7 @@ export function AppUpdatePrompt() {
     try {
       await ABAppUpdate.downloadAndInstall({ url: update.apkUrl })
       setProgress(100)
+      setInstalling(false)
       showToast('APK update siap. Lanjutkan instalasi pada dialog Android.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Update gagal diunduh'
@@ -235,7 +236,7 @@ export function AppUpdatePrompt() {
   if (!update) return null
 
   return (
-    <Dialog open={open} onOpenChange={value => { if (!installing) setOpen(value) }}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="border-white/12 bg-[#121827]/98 text-white shadow-2xl sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
