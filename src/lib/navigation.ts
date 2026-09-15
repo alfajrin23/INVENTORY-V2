@@ -8,6 +8,7 @@ import {
   PackageMinus,
   PackagePlus,
   Settings,
+  ShoppingCart,
   Store,
   TrendingUp,
 } from 'lucide-react'
@@ -32,6 +33,8 @@ export const routes = {
   revenueDay: '/pendapatanharian.html',
   revenueWeek: '/pendapatanmingguan.html',
   revenueMonth: '/pendapatanbulanan.html',
+  shopping: '/belanja.html',
+  updates: '/pembaruan.html',
   settings: '/pengaturan.html',
   logsInput: '/logsinput.html',
   profile: '/profilsetting.html',
@@ -47,6 +50,7 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Barang Keluar', path: routes.outgoingReport, icon: PackageMinus, group: 'laporan' },
   { label: 'Stok Barang', path: routes.stockReport, icon: PackageCheck, group: 'laporan' },
   { label: 'Pendapatan', path: routes.revenueYear, icon: BarChart3, group: 'laporan' },
+  { label: 'Belanja', path: routes.shopping, icon: ShoppingCart, group: 'laporan' },
 ]
 
 export const mobileNavigation = [
