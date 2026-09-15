@@ -39,40 +39,13 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Barcode parser test
-        continue-on-error: true
-        run: npx playwright test tests/e2e/scanner-barcode.spec.ts --grep "custom barcode parser"
-
-      - name: Scanner all-results and voice test
-        continue-on-error: true
-        run: npx playwright test tests/e2e/scanner-barcode.spec.ts --grep "scanner exposes every"
-
-      - name: Custom barcode manager test
-        continue-on-error: true
-        run: npx playwright test tests/e2e/scanner-barcode.spec.ts --grep "barcode manager saves"
-
-      - name: Factory barcode test
-        continue-on-error: true
-        run: npx playwright test tests/e2e/scanner-barcode.spec.ts --grep "factory barcode accepts"
-
-      - name: Thermal printer tests
-        continue-on-error: true
-        run: npx playwright test tests/e2e/thermal-printer.spec.ts
-
-      - name: Shopping, release notes, report tests
-        continue-on-error: true
-        run: npx playwright test tests/e2e/shopping-release-report.spec.ts
-
-      - name: Existing critical regressions
-        continue-on-error: true
-        run: npx playwright test tests/e2e/android-back-update.spec.ts tests/e2e/android-native-fixes.spec.ts tests/e2e/restock-recommendations.spec.ts tests/e2e/voice-guide.spec.ts tests/e2e/guide.spec.ts
+      - name: Playwright full regression suite
+        run: npm test
 
       - name: Sync Capacitor Android
-        if: always()
         run: npx cap sync android
 
       - name: Android ESC/POS unit tests and debug APK build
-        if: always()
         run: |
           chmod +x android/gradlew
           cd android
