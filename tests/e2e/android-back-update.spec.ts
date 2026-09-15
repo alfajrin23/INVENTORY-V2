@@ -4,6 +4,11 @@ const releasesPattern = 'https://api.github.com/repos/alfajrin23/INVENTORY-V2/re
 
 type NativeCall = { plugin: string; method: string; options?: Record<string, unknown> }
 
+type BackAwareWindow = typeof window & {
+  __abHandleNativeBack?: () => void
+  nativeCalls: NativeCall[]
+}
+
 async function mockAndroid(page: Page, releases: unknown[] = []) {
   await page.route(releasesPattern, route => route.fulfill({
     status: 200,
@@ -59,7 +64,7 @@ test('Android back closes the top shared dialog before leaving the page', async 
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
 
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ab:native-back')))
+  await page.evaluate(() => (window as BackAwareWindow).__abHandleNativeBack?.())
   await expect(dialog).toBeHidden()
   await expect(page).toHaveURL(/\/pengaturan\.html$/)
 })
@@ -69,8 +74,21 @@ test('Android back uses the report parent when a detail page has no browser hist
   await page.goto('/pendapatanharian.html')
   await expect(page).toHaveURL(/\/pendapatanharian\.html$/)
 
-  await page.evaluate(() => window.dispatchEvent(new CustomEvent('ab:native-back')))
+  await page.evaluate(() => (window as BackAwareWindow).__abHandleNativeBack?.())
   await expect(page).toHaveURL(/\/laporan\.html$/)
+})
+
+test('Android app exits only after two back presses on the dashboard', async ({ page }) => {
+  await mockAndroid(page)
+  await page.goto('/')
+
+  await page.evaluate(() => (window as BackAwareWindow).__abHandleNativeBack?.())
+  await expect.poll(() => page.evaluate(() => (window as BackAwareWindow).nativeCalls
+    .filter(call => call.plugin === 'ABAppUpdate' && call.method === 'exitApp').length)).toBe(0)
+
+  await page.evaluate(() => (window as BackAwareWindow).__abHandleNativeBack?.())
+  await expect.poll(() => page.evaluate(() => (window as BackAwareWindow).nativeCalls
+    .filter(call => call.plugin === 'ABAppUpdate' && call.method === 'exitApp').length)).toBe(1)
 })
 
 test('Android updater popup downloads the newer GitHub Release through the native plugin', async ({ page }) => {
@@ -97,6 +115,6 @@ test('Android updater popup downloads the newer GitHub Release through the nativ
   await expect(updateDialog).toContainText('versi 1.3.0')
 
   await updateDialog.getByRole('button', { name: 'Update sekarang' }).click()
-  await expect.poll(() => page.evaluate(() => (window as typeof window & { nativeCalls: NativeCall[] }).nativeCalls
+  await expect.poll(() => page.evaluate(() => (window as BackAwareWindow).nativeCalls
     .some(call => call.plugin === 'ABAppUpdate' && call.method === 'downloadAndInstall'))).toBe(true)
 })
