@@ -5,6 +5,9 @@ import { AndroidBackHandler } from '@/components/android-back-handler'
 import { AppUpdatePrompt } from '@/components/app-update-prompt'
 import { AuthGate } from '@/components/auth-gate'
 import { AppShell } from '@/components/layout/app-shell'
+import { ThermalPrintController } from '@/components/printer/thermal-print-controller'
+import { ReleaseNotesPrompt } from '@/components/release-notes/release-notes-prompt'
+import { ShoppingNotificationRouter } from '@/components/shopping/shopping-notification-router'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { InventoryProvider } from '@/hooks/use-inventory'
 import { ToastProvider } from '@/hooks/use-toast'
@@ -19,6 +22,8 @@ const loadLogsInputPage = () => import('@/pages/logs-input-page')
 const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
 const loadReportPages = () => import('@/pages/report-pages')
 const loadOutgoingReportPage = () => import('@/pages/outgoing-report-page')
+const loadShoppingPage = () => import('@/pages/shopping-page')
+const loadUpdateHistoryPage = () => import('@/pages/update-history-page')
 
 const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
 const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsPage })))
@@ -26,9 +31,7 @@ const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: mo
 const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsWithGuidePage })))
 const LogsInputPage = lazy(() => loadLogsInputPage().then((module) => ({ default: module.LogsInputPage })))
-const ProfileSettingsPage = lazy(() =>
-  loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })),
-)
+const ProfileSettingsPage = lazy(() => loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })))
 const IncomingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.IncomingReportPage })))
 const OutgoingReportPage = lazy(() => loadOutgoingReportPage().then((module) => ({ default: module.OutgoingReportPage })))
 const StockReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.StockReportPage })))
@@ -36,6 +39,8 @@ const RevenueAnnualPage = lazy(() => loadReportPages().then((module) => ({ defau
 const RevenueDailyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueDailyPage })))
 const RevenueWeeklyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueWeeklyPage })))
 const RevenueMonthlyPage = lazy(() => loadReportPages().then((module) => ({ default: module.RevenueMonthlyPage })))
+const ShoppingPage = lazy(() => loadShoppingPage().then((module) => ({ default: module.ShoppingPage })))
+const UpdateHistoryPage = lazy(() => loadUpdateHistoryPage().then((module) => ({ default: module.UpdateHistoryPage })))
 
 type NetworkInformation = { saveData?: boolean; effectiveType?: string }
 type NavigatorWithConnection = Navigator & { connection?: NetworkInformation }
@@ -80,6 +85,9 @@ function App() {
           <AuthGate><InventoryProvider>
             <RoutePreloader />
             <AppUpdatePrompt />
+            <ReleaseNotesPrompt />
+            <ThermalPrintController />
+            <ShoppingNotificationRouter />
             <Suspense fallback={<div className="p-6 text-sm text-white/60">Memuat halaman...</div>}>
               <Routes>
                 <Route element={<AppShell />}>
@@ -95,6 +103,8 @@ function App() {
                   <Route path={routes.revenueDay} element={<RevenueDailyPage />} />
                   <Route path={routes.revenueWeek} element={<RevenueWeeklyPage />} />
                   <Route path={routes.revenueMonth} element={<RevenueMonthlyPage />} />
+                  <Route path={routes.shopping} element={<ShoppingPage />} />
+                  <Route path={routes.updates} element={<UpdateHistoryPage />} />
                   <Route path={routes.settings} element={<SettingsPage />} />
                   <Route path={routes.logsInput} element={<LogsInputPage />} />
                   <Route path={routes.profile} element={<ProfileSettingsPage />} />
