@@ -5,6 +5,7 @@ import {
   buildReceiptPrintAnimationDocument,
   playReceiptPdfAnimation,
 } from '@/lib/receipt-animation'
+import { isNativeAndroid, requestThermalReceiptPrint } from '@/lib/thermal-printer'
 import type { CartItem, HistoryItem, Product, RevenueRow, StoreRecord, TransactionCategory } from '@/lib/types'
 
 function slug(value: string) {
@@ -172,6 +173,11 @@ export function printReceiptWindow(
   items: CartItem[],
   category: TransactionCategory,
 ) {
+  if (isNativeAndroid()) {
+    requestThermalReceiptPrint({ store, items, category })
+    return
+  }
+
   const popup = window.open('', '_blank', 'width=460,height=780')
   if (!popup) return
 
