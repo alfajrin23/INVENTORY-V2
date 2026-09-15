@@ -5,26 +5,7 @@ import { GlassPanel } from '@/components/shared/glass-panel'
 import { Badge } from '@/components/ui/badge'
 import { useInventory } from '@/hooks/use-inventory'
 import { formatNumber } from '@/lib/format'
-
-type RestockStatus = 'habis' | 'kritis' | 'laris'
-
-type RestockRecommendation = {
-  id: string
-  name: string
-  brand: string
-  stock: number
-  sold7: number
-  sold30: number
-  targetStock: number
-  suggestedQty: number
-  status: RestockStatus
-  priority: number
-}
-
-const DAY_MS = 24 * 60 * 60 * 1000
-const MIN_SAFE_STOCK = 5
-const COVERAGE_DAYS = 21
-const SAFETY_FACTOR = 1.25
+import { buildRestockRecommendations, type RestockStatus } from '@/lib/restock'
 
 function statusLabel(status: RestockStatus) {
   if (status === 'habis') return 'Habis'
@@ -47,78 +28,10 @@ function statusIcon(status: RestockStatus) {
 export function RestockRecommendations() {
   const { activeStore, products, history, loading } = useInventory()
 
-  const recommendations = useMemo(() => {
-    const now = Date.now()
-    const sevenDaysAgo = now - 7 * DAY_MS
-    const thirtyDaysAgo = now - 30 * DAY_MS
-    const salesByBarcode = new Map<string, { sold7: number; sold30: number }>()
-
-    for (const item of history) {
-      if (item.kategori !== 'keluar') continue
-      if (activeStore && item.storeId !== activeStore.id) continue
-
-      const time = new Date(item.tanggal).getTime()
-      if (!Number.isFinite(time) || time < thirtyDaysAgo || time > now) continue
-
-      const current = salesByBarcode.get(item.barcode) ?? { sold7: 0, sold30: 0 }
-      current.sold30 += item.jumlah
-      if (time >= sevenDaysAgo) current.sold7 += item.jumlah
-      salesByBarcode.set(item.barcode, current)
-    }
-
-    const metrics = products.map(product => {
-      const sales = salesByBarcode.get(product.barcode) ?? { sold7: 0, sold30: 0 }
-      return { product, ...sales }
-    })
-
-    const topSellerIds = new Set(
-      metrics
-        .filter(item => item.sold30 > 0)
-        .sort((a, b) => b.sold30 - a.sold30 || b.sold7 - a.sold7)
-        .slice(0, Math.min(3, metrics.length))
-        .map(item => item.product.id),
-    )
-
-    return metrics
-      .map(({ product, sold7, sold30 }): RestockRecommendation | null => {
-        const recentDailySales = Math.max(sold7 / 7, sold30 / 30)
-        const projectedBuffer = Math.ceil(recentDailySales * COVERAGE_DAYS * SAFETY_FACTOR)
-        const targetStock = Math.max(MIN_SAFE_STOCK, projectedBuffer)
-        const suggestedQty = Math.max(0, targetStock - product.stok)
-        const isFastSeller = topSellerIds.has(product.id) && sold30 > 0
-
-        let status: RestockStatus | null = null
-        let priority = 0
-        if (product.stok === 0) {
-          status = 'habis'
-          priority = 3
-        } else if (product.stok <= MIN_SAFE_STOCK) {
-          status = 'kritis'
-          priority = 2
-        } else if (isFastSeller && suggestedQty > 0) {
-          status = 'laris'
-          priority = 1
-        }
-
-        if (!status) return null
-
-        return {
-          id: product.id,
-          name: product.namaBarang,
-          brand: product.brand,
-          stock: product.stok,
-          sold7,
-          sold30,
-          targetStock,
-          suggestedQty: Math.max(suggestedQty, product.stok === 0 ? MIN_SAFE_STOCK : 0),
-          status,
-          priority,
-        }
-      })
-      .filter((item): item is RestockRecommendation => item !== null)
-      .sort((a, b) => b.priority - a.priority || b.suggestedQty - a.suggestedQty || b.sold30 - a.sold30)
-      .slice(0, 10)
-  }, [activeStore, history, products])
+  const recommendations = useMemo(
+    () => buildRestockRecommendations(products, history, activeStore?.id).slice(0, 10),
+    [activeStore?.id, history, products],
+  )
 
   return (
     <GlassPanel className="p-4 sm:p-5" glow="amber">
@@ -139,7 +52,7 @@ export function RestockRecommendations() {
 
       {loading ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map(item => <div key={item} className="h-44 animate-pulse rounded-2xl border border-white/10 bg-white/[0.05]" />)}
+          {[0, 1, 2].map(item => <div key={item} className="h-44 animate-pulse rounded-2xl border border-white/10 bg-white/[0.05] motion-reduce:animate-none" />)}
         </div>
       ) : recommendations.length ? (
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
