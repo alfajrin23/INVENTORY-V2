@@ -1,5 +1,5 @@
 import { ArrowRight, Sparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
@@ -19,26 +19,48 @@ import {
 } from '@/lib/release-notes'
 import { routes } from '@/lib/navigation'
 
+const INITIAL_OPEN_DELAY_MS = 850
+const MODAL_RETRY_DELAY_MS = 400
+
+function hasAnotherOpenDialog() {
+  return Boolean(document.querySelector('[data-slot="dialog-content"][data-state="open"]'))
+}
+
 export function ReleaseNotesPrompt() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [version, setVersion] = useState('')
   const [note, setNote] = useState<ReleaseNote | null>(null)
+  const openTimer = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
-    let timer = 0
+
+    const clearTimer = () => {
+      if (openTimer.current !== null) window.clearTimeout(openTimer.current)
+      openTimer.current = null
+    }
+
+    const tryOpen = () => {
+      if (cancelled) return
+      if (hasAnotherOpenDialog()) {
+        openTimer.current = window.setTimeout(tryOpen, MODAL_RETRY_DELAY_MS)
+        return
+      }
+      setOpen(true)
+      openTimer.current = null
+    }
+
     void releaseNoteForCurrentVersion().then(result => {
       if (cancelled || hasSeenReleaseNotes(result.version)) return
       setVersion(result.version)
       setNote(result.note)
-      timer = window.setTimeout(() => {
-        if (!cancelled) setOpen(true)
-      }, 650)
+      openTimer.current = window.setTimeout(tryOpen, INITIAL_OPEN_DELAY_MS)
     })
+
     return () => {
       cancelled = true
-      window.clearTimeout(timer)
+      clearTimer()
     }
   }, [])
 

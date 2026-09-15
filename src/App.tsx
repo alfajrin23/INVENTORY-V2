@@ -14,7 +14,7 @@ import { ToastProvider } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
 
 const loadDashboardPage = () => import('@/pages/dashboard-page')
-const loadProductsPage = () => import('@/pages/products-page')
+const loadProductsPage = () => import('@/pages/products-with-tools-page')
 const loadHistoryPage = () => import('@/pages/history-page')
 const loadReportsHubPage = () => import('@/pages/reports-hub-page')
 const loadSettingsPage = () => import('@/pages/settings-with-guide-page')
@@ -26,7 +26,7 @@ const loadShoppingPage = () => import('@/pages/shopping-page')
 const loadUpdateHistoryPage = () => import('@/pages/update-history-page')
 
 const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
-const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsPage })))
+const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsWithToolsPage })))
 const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: module.HistoryPage })))
 const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsWithGuidePage })))
