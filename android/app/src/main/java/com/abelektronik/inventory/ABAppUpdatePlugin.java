@@ -68,7 +68,7 @@ public class ABAppUpdatePlugin extends Plugin {
     @PluginMethod
     public void downloadAndInstall(PluginCall call) {
         String urlValue = call.getString("url");
-        if (urlValue == null || urlValue.isBlank()) {
+        if (urlValue == null || urlValue.trim().isEmpty()) {
             call.reject("URL update tidak tersedia.");
             return;
         }
