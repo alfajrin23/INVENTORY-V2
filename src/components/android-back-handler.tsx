@@ -14,6 +14,8 @@ const FALLBACK_PARENT: Record<string, string> = {
   [routes.revenueDay]: routes.reports,
   [routes.revenueWeek]: routes.reports,
   [routes.revenueMonth]: routes.reports,
+  [routes.shopping]: routes.reports,
+  [routes.updates]: routes.settings,
   [routes.profile]: routes.settings,
   [routes.logsInput]: routes.settings,
   [routes.products]: routes.dashboard,

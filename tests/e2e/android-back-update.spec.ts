@@ -17,6 +17,7 @@ async function mockAndroid(page: Page, releases: unknown[] = []) {
   }))
 
   await page.addInitScript(() => {
+    localStorage.setItem('ab:last-seen-release-notes-version:v1', '1.2.0')
     const calls: NativeCall[] = []
     const fakeWindow = window as typeof window & {
       androidBridge: object

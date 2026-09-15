@@ -33,17 +33,20 @@ jobs:
       - name: TypeScript and production build
         run: npm run build
 
+      - name: Lint
+        run: npm run lint
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Android navigation, updater, and restock regression tests
-        run: npx playwright test tests/e2e/android-back-update.spec.ts tests/e2e/restock-recommendations.spec.ts
+      - name: Playwright full regression suite
+        run: npm test
 
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Compile Android Java
+      - name: Android ESC/POS unit tests and debug APK build
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew compileDebugJavaWithJavac
+          ./gradlew testDebugUnitTest assembleDebug

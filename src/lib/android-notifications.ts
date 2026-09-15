@@ -1,9 +1,19 @@
 import { LocalNotifications } from '@capacitor/local-notifications'
+
 import type { Product } from '@/lib/types'
 
 export const INVENTORY_NOTIFICATION_ID = 2201
 export const INVENTORY_NOTIFICATION_CHANNEL = 'inventory_status_v2'
 export const INVENTORY_NOTIFICATION_ACTIONS = 'inventory_actions'
+export const SHOPPING_NOTIFICATION_ID = 2202
+export const SHOPPING_NOTIFICATION_CHANNEL = 'shopping_mode_v1'
+export const SHOPPING_NOTIFICATION_ACTIONS = 'shopping_actions'
+
+export type ShoppingNotificationItem = {
+  name: string
+  stock: number
+  suggestedQty: number
+}
 
 export function inventoryNotificationContent(storeName: string, products: Product[]) {
   const lowStock = products.filter(product => product.stok <= 5)
@@ -14,6 +24,16 @@ export function inventoryNotificationContent(storeName: string, products: Produc
     title: `${storeName} - Inventory`,
     body,
     inboxList: lowStock.length ? lowStock.slice(0, 4).map(product => `${product.namaBarang}: ${product.stok} tersisa`) : undefined,
+  }
+}
+
+export function shoppingNotificationContent(items: ShoppingNotificationItem[]) {
+  const visible = items.slice(0, 3).map(item => `${item.name} · beli ${item.suggestedQty}`)
+  if (items.length > 3) visible.push(`+${items.length - 3} lainnya`)
+  return {
+    title: '🛒 Mode Belanja',
+    body: `${items.length} barang belum dibeli`,
+    inboxList: visible,
   }
 }
 
@@ -29,6 +49,21 @@ export async function registerInventoryNotification() {
     types: [{ id: INVENTORY_NOTIFICATION_ACTIONS, actions: [
       { id: 'voice', title: 'Voice AI' },
       { id: 'dashboard', title: 'Lihat stok' },
+    ] }],
+  })
+}
+
+export async function registerShoppingNotification() {
+  await LocalNotifications.createChannel({
+    id: SHOPPING_NOTIFICATION_CHANNEL,
+    name: 'Mode Belanja',
+    description: 'Daftar restock yang sedang dibeli',
+    importance: 3,
+    visibility: 0,
+  })
+  await LocalNotifications.registerActionTypes({
+    types: [{ id: SHOPPING_NOTIFICATION_ACTIONS, actions: [
+      { id: 'open-shopping', title: 'Buka Belanja' },
     ] }],
   })
 }
@@ -66,8 +101,6 @@ export async function prepareInventoryNotification(requestPermission = false) {
 }
 
 export async function showInventoryNotification(storeName: string, products: Product[]) {
-  // Jangan mencoba menjadwalkan notifikasi bila user belum mengizinkan.
-  // Ini penting agar resume/focus aplikasi tidak memunculkan alur permission berulang.
   const permission = await LocalNotifications.checkPermissions()
   if (permission.display !== 'granted') return false
 
@@ -96,7 +129,42 @@ export async function showInventoryNotification(storeName: string, products: Pro
   return true
 }
 
+export async function showShoppingNotification(items: ShoppingNotificationItem[]) {
+  if (!items.length) {
+    await clearShoppingNotification()
+    return false
+  }
+
+  const permission = await LocalNotifications.checkPermissions()
+  if (permission.display !== 'granted') return false
+  const enabled = await LocalNotifications.areEnabled()
+  if (!enabled.value) return false
+
+  await registerShoppingNotification()
+  const content = shoppingNotificationContent(items)
+  await LocalNotifications.schedule({ notifications: [{
+    id: SHOPPING_NOTIFICATION_ID,
+    ...content,
+    channelId: SHOPPING_NOTIFICATION_CHANNEL,
+    actionTypeId: SHOPPING_NOTIFICATION_ACTIONS,
+    isExactNotification: false,
+    isExactMandatory: false,
+    ongoing: true,
+    autoCancel: false,
+    smallIcon: 'ic_stat_inventory',
+    largeIcon: 'ic_inventory_gradient',
+    iconColor: '#0D9488',
+    extra: { destination: 'shopping' },
+  }] })
+  return true
+}
+
 export async function clearInventoryNotification() {
   await LocalNotifications.cancel({ notifications: [{ id: INVENTORY_NOTIFICATION_ID }] })
   await LocalNotifications.removeDeliveredNotificationsById({ ids: [INVENTORY_NOTIFICATION_ID] })
+}
+
+export async function clearShoppingNotification() {
+  await LocalNotifications.cancel({ notifications: [{ id: SHOPPING_NOTIFICATION_ID }] })
+  await LocalNotifications.removeDeliveredNotificationsById({ ids: [SHOPPING_NOTIFICATION_ID] })
 }

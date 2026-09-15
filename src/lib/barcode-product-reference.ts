@@ -76,27 +76,8 @@ const barcodeReferences: ProductReference[] = [
 ]
 
 const fieldTokens = new Set([
-  'barcode',
-  'bar-code',
-  'kode',
-  'sku',
-  'ean',
-  'upc',
-  'nama',
-  'name',
-  'produk',
-  'product',
-  'item',
-  'barang',
-  'brand',
-  'merek',
-  'merk',
-  'harga',
-  'price',
-  'stok',
-  'stock',
-  'qty',
-  'jumlah',
+  'barcode', 'bar-code', 'kode', 'sku', 'ean', 'upc', 'nama', 'name', 'produk', 'product', 'item', 'barang',
+  'brand', 'merek', 'merk', 'harga', 'price', 'stok', 'stock', 'qty', 'jumlah',
 ])
 
 const referenceNames = productCategories.map((item) => item.name)
@@ -121,6 +102,10 @@ function normalizeText(value: string) {
 
 export function normalizeBarcodeValue(value: string) {
   return value.trim().replace(/\s+/g, '')
+}
+
+export function isSafeCustomBarcodeValue(value: string) {
+  return /^[A-Za-z0-9]{1,32}$/.test(normalizeBarcodeValue(value))
 }
 
 function titleCase(text: string) {
@@ -238,10 +223,10 @@ export function extractBarcodeValue(raw: string) {
   const fields = fieldsFromScan(text)
   if (fields.barcode) return fields.barcode
 
-  const numeric = text.match(/\b\d{6,18}\b/)
-  if (numeric) return numeric[0]
+  const numeric = text.match(/\b\d{1,18}\b/)
+  if (numeric && numeric[0] === text) return numeric[0]
 
-  if (/^[A-Za-z0-9._-]{3,80}$/.test(text)) {
+  if (/^[A-Za-z0-9._-]{1,80}$/.test(text)) {
     return normalizeBarcodeValue(text)
   }
 
@@ -283,10 +268,7 @@ function findBarcodeReference(barcode: string) {
 }
 
 function suggestion(input: Omit<ProductScanSuggestion, 'reason'> & { reason?: string }): ProductScanSuggestion {
-  return {
-    ...input,
-    reason: input.reason ?? '',
-  }
+  return { ...input, reason: input.reason ?? '' }
 }
 
 export function lookupScannedProduct(raw: string, products: Product[] = []): ProductScanSuggestion {
