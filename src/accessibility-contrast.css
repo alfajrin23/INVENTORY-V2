@@ -1,0 +1,277 @@
+/* Accessibility-focused contrast overrides for scanner results and Shopping Mode.
+ * Scoped to unique ARIA hooks so unrelated pages keep their existing visual design.
+ */
+
+/* Scanner search results: no filled card background, only a clear left accent line. */
+[aria-label="Hasil pencarian produk"] > button[role="listitem"] {
+  background: transparent !important;
+  border: 0 !important;
+  border-left: 4px solid #0891b2 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding-left: 0.875rem !important;
+}
+
+[aria-label="Hasil pencarian produk"] > button[role="listitem"]:hover,
+[aria-label="Hasil pencarian produk"] > button[role="listitem"]:active {
+  background: transparent !important;
+  border-left-color: #0e7490 !important;
+}
+
+[aria-label="Hasil pencarian produk"] > button[role="listitem"]:focus-visible {
+  background: transparent !important;
+  outline: 3px solid #0891b2 !important;
+  outline-offset: 2px;
+}
+
+.light [aria-label="Hasil pencarian produk"] > button[role="listitem"] {
+  color: #0f172a !important;
+  border-left-color: #0e7490 !important;
+}
+
+.light [aria-label="Hasil pencarian produk"] > button[role="listitem"] span.block:first-child {
+  color: #0f172a !important;
+}
+
+.light [aria-label="Hasil pencarian produk"] > button[role="listitem"] span.block:not(:first-child) {
+  color: #475569 !important;
+}
+
+.dark [aria-label="Hasil pencarian produk"] > button[role="listitem"] {
+  color: #f8fafc !important;
+  border-left-color: #22d3ee !important;
+}
+
+.dark [aria-label="Hasil pencarian produk"] > button[role="listitem"] span.block:first-child {
+  color: #f8fafc !important;
+}
+
+.dark [aria-label="Hasil pencarian produk"] > button[role="listitem"] span.block:not(:first-child) {
+  color: #cbd5e1 !important;
+}
+
+/* Shopping header/control panel. */
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) h1 {
+  color: #0f172a !important;
+}
+
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) p {
+  color: #475569 !important;
+}
+
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) input[aria-label="Cari nama barang merek atau barcode"] {
+  background: #ffffff !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) input[aria-label="Cari nama barang merek atau barcode"]::placeholder {
+  color: #64748b !important;
+  opacity: 1;
+}
+
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) div:has(> input[aria-label="Cari nama barang merek atau barcode"]) > svg {
+  color: #475569 !important;
+}
+
+.light [aria-label="Filter belanja stok"] button[aria-pressed="false"] {
+  background: #ffffff !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
+}
+
+.light [aria-label="Filter belanja stok"] button[aria-pressed="true"] {
+  background: #0f766e !important;
+  border-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+.light section:has(input[aria-label="Cari nama barang merek atau barcode"]) [role="status"] {
+  background: #ecfdf5 !important;
+  border-color: #86efac !important;
+  color: #14532d !important;
+}
+
+.dark section:has(input[aria-label="Cari nama barang merek atau barcode"]) {
+  background: #111827 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark section:has(input[aria-label="Cari nama barang merek atau barcode"]) h1,
+.dark section:has(input[aria-label="Cari nama barang merek atau barcode"]) p {
+  color: #f8fafc !important;
+}
+
+.dark section:has(input[aria-label="Cari nama barang merek atau barcode"]) input[aria-label="Cari nama barang merek atau barcode"] {
+  background: #0f172a !important;
+  border-color: #64748b !important;
+  color: #f8fafc !important;
+}
+
+.dark section:has(input[aria-label="Cari nama barang merek atau barcode"]) input[aria-label="Cari nama barang merek atau barcode"]::placeholder {
+  color: #cbd5e1 !important;
+  opacity: 1;
+}
+
+.dark [aria-label="Filter belanja stok"] button[aria-pressed="false"] {
+  background: #0f172a !important;
+  border-color: #64748b !important;
+  color: #f8fafc !important;
+}
+
+.dark [aria-label="Filter belanja stok"] button[aria-pressed="true"] {
+  background: #0e7490 !important;
+  border-color: #22d3ee !important;
+  color: #ffffff !important;
+}
+
+/* Shopping product list: light background gets dark text; dark background gets light text. */
+.light section[aria-label="Daftar barang yang perlu dibeli"] article {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08) !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] article h2 {
+  color: #0f172a !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] article p,
+.light section[aria-label="Daftar barang yang perlu dibeli"] article p * {
+  color: #475569 !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] article > div > div:last-child > span {
+  color: #334155 !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] article strong {
+  color: #0f172a !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] article h2 + span {
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] article > button:first-child {
+  background: #f8fafc !important;
+  border-color: #64748b !important;
+  color: #0f766e !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article {
+  background: #111827 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article h2,
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article strong {
+  color: #f8fafc !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article p,
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article p *,
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article > div > div:last-child > span {
+  color: #cbd5e1 !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article h2 + span {
+  background: #1e293b !important;
+  border: 1px solid #475569 !important;
+  color: #f8fafc !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] article > button:first-child {
+  background: #0f172a !important;
+  border-color: #94a3b8 !important;
+  color: #a7f3d0 !important;
+}
+
+/* Empty-state card in Shopping Mode. */
+.light section[aria-label="Daftar barang yang perlu dibeli"] > div {
+  background: #f0fdf4 !important;
+  border-color: #86efac !important;
+  color: #14532d !important;
+}
+
+.light section[aria-label="Daftar barang yang perlu dibeli"] > div p {
+  color: #14532d !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] > div {
+  background: #052e2b !important;
+  border-color: #2dd4bf !important;
+  color: #ecfdf5 !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] > div p {
+  color: #ecfdf5 !important;
+}
+
+/* Completed shopping items. */
+.light section[aria-labelledby="shopping-completed-title"] {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light #shopping-completed-title {
+  color: #0f172a !important;
+}
+
+.light section[aria-labelledby="shopping-completed-title"] > div > div {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+.light section[aria-labelledby="shopping-completed-title"] strong {
+  color: #0f172a !important;
+}
+
+.light section[aria-labelledby="shopping-completed-title"] strong + span {
+  color: #475569 !important;
+}
+
+.light section[aria-labelledby="shopping-completed-title"] > div > div > span:last-child {
+  color: #166534 !important;
+}
+
+.dark section[aria-labelledby="shopping-completed-title"] {
+  background: #111827 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark #shopping-completed-title,
+.dark section[aria-labelledby="shopping-completed-title"] strong {
+  color: #f8fafc !important;
+}
+
+.dark section[aria-labelledby="shopping-completed-title"] strong + span {
+  color: #cbd5e1 !important;
+}
+
+/* Finish-shopping action remains readable in both themes. */
+.light section[aria-label="Daftar barang yang perlu dibeli"] ~ button {
+  background: #f0fdf4 !important;
+  border-color: #16a34a !important;
+  color: #14532d !important;
+}
+
+.dark section[aria-label="Daftar barang yang perlu dibeli"] ~ button {
+  background: #052e2b !important;
+  border-color: #34d399 !important;
+  color: #ecfdf5 !important;
+}
