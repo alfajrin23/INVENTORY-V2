@@ -76,29 +76,40 @@ export function ReleaseNotesPrompt() {
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) dismiss(); else setOpen(true) }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto border-white/12 bg-[#121827]/98 text-white sm:max-w-lg">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-white/12 dark:bg-[#121827]/98 dark:text-white sm:max-w-lg">
         <DialogHeader>
-          <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-violet-300/14 text-violet-100" aria-hidden="true">
+          <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-700 dark:bg-violet-300/14 dark:text-violet-200" aria-hidden="true">
             <Sparkles className="size-6" />
           </div>
-          <DialogTitle className="text-2xl text-white">🎉 Yang Baru di Inventory V2</DialogTitle>
-          <DialogDescription className="text-base text-white/62">Versi {version || 'terbaru'} · tampil satu kali di perangkat ini.</DialogDescription>
+          <DialogTitle className="text-2xl text-slate-950 dark:text-white">🎉 Yang Baru di Inventory V2</DialogTitle>
+          <DialogDescription className="text-base text-slate-600 dark:text-slate-300">
+            Versi {version || 'terbaru'} · tampil satu kali di perangkat ini.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-2" role="list" aria-label="Fitur baru versi ini">
           {(note?.summary ?? []).map(item => (
-            <div key={item} role="listitem" className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.045] p-3">
-              <span className="mt-1 size-2 shrink-0 rounded-full bg-cyan-300" aria-hidden="true" />
-              <p className="text-sm leading-6 text-white/78">{item}</p>
+            <div key={item} role="listitem" className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.045]">
+              <span className="mt-1 size-2 shrink-0 rounded-full bg-cyan-700 dark:bg-cyan-300" aria-hidden="true" />
+              <p className="text-sm leading-6 text-slate-700 dark:text-slate-200">{item}</p>
             </div>
           ))}
         </div>
 
         <DialogFooter className="gap-2 sm:grid sm:grid-cols-2">
-          <Button type="button" variant="outline" className="min-h-11 border-white/15" onClick={dismiss}>
+          <Button
+            type="button"
+            variant="outline"
+            className="min-h-11 border-slate-300 bg-white text-slate-900 hover:bg-slate-100 hover:text-slate-950 dark:border-white/20 dark:bg-transparent dark:text-white dark:hover:bg-white/10 dark:hover:text-white"
+            onClick={dismiss}
+          >
             Mengerti
           </Button>
-          <Button type="button" className="min-h-11" onClick={seeAll}>
+          <Button
+            type="button"
+            className="min-h-11 bg-cyan-700 text-white hover:bg-cyan-800 dark:bg-cyan-300 dark:text-slate-950 dark:hover:bg-cyan-200"
+            onClick={seeAll}
+          >
             Lihat Semua Update
             <ArrowRight className="size-4" />
           </Button>
