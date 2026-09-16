@@ -1,10 +1,8 @@
 import type jsPDF from 'jspdf'
 
 import { dateTimeLabel, formatCurrency } from '@/lib/format'
-import {
-  buildReceiptPrintAnimationDocument,
-  playReceiptPdfAnimation,
-} from '@/lib/receipt-animation'
+import { playReceiptPdfAnimation } from '@/lib/receipt-animation'
+import { buildReceiptPdfMatchedPrintDocument } from '@/lib/receipt-print-template'
 import { isNativeAndroid, requestThermalReceiptPrint } from '@/lib/thermal-printer'
 import type { CartItem, HistoryItem, Product, RevenueRow, StoreRecord, TransactionCategory } from '@/lib/types'
 
@@ -178,11 +176,20 @@ export function printReceiptWindow(
     return
   }
 
+  // Open the popup synchronously so browsers do not block it after the animation await.
   const popup = window.open('', '_blank', 'width=460,height=780')
   if (!popup) return
 
   popup.document.open()
-  popup.document.write(buildReceiptPrintAnimationDocument(store, items, category))
+  popup.document.write(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Menyiapkan Resi</title></head><body style="font-family:Arial,sans-serif;padding:24px;color:#0f172a">Menyiapkan template resi…</body></html>`)
   popup.document.close()
-  popup.focus()
+
+  void (async () => {
+    await playReceiptPdfAnimation(store, items, category)
+    if (popup.closed) return
+    popup.document.open()
+    popup.document.write(buildReceiptPdfMatchedPrintDocument(store, items, category))
+    popup.document.close()
+    popup.focus()
+  })()
 }
