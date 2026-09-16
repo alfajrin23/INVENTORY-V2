@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { PrinterSetupDialog } from '@/components/printer/printer-setup-dialog'
 import { useToast } from '@/hooks/use-toast'
+import { playReceiptPdfAnimation } from '@/lib/receipt-animation'
 import {
   isNativeAndroid,
   printReceiptDirect,
@@ -14,6 +15,7 @@ import {
 export function ThermalPrintController() {
   const { showToast } = useToast()
   const pending = useRef<ThermalReceiptPrintRequest | null>(null)
+  const animatedRequest = useRef<ThermalReceiptPrintRequest | null>(null)
   const busy = useRef(false)
   const [setupOpen, setSetupOpen] = useState(false)
 
@@ -22,8 +24,16 @@ export function ThermalPrintController() {
     if (!request || busy.current) return false
     busy.current = true
     try {
+      // Reuse the exact same receipt animation that runs before Save PDF.
+      // When setup/reconnect is needed, do not replay the animation for the same pending receipt.
+      if (animatedRequest.current !== request) {
+        await playReceiptPdfAnimation(request.store, request.items, request.category)
+        animatedRequest.current = request
+      }
+
       await printReceiptDirect(request.store, request.items, request.category)
       pending.current = null
+      animatedRequest.current = null
       if (navigator.vibrate) navigator.vibrate([30, 25, 30])
       showToast('Resi berhasil dikirim ke printer', 'success')
       setSetupOpen(false)
@@ -50,6 +60,7 @@ export function ThermalPrintController() {
         return
       }
       pending.current = request
+      animatedRequest.current = null
       void printPending()
     }
 
@@ -71,6 +82,7 @@ export function ThermalPrintController() {
         if (!open && pending.current) {
           showToast('Cetak dibatalkan. Resi tetap dapat dicetak kembali dari transaksi.', 'info')
           pending.current = null
+          animatedRequest.current = null
         }
       }}
       onConnected={connected}
