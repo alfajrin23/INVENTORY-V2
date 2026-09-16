@@ -26,10 +26,11 @@ public class EscPos58Test {
     }
 
     @Test
-    public void receiptContainsNativeQrAndBarcodeCommands() {
+    public void receiptMatchesPdfBodyAndKeepsNativeQrBarcodeOptions() {
         EscPos58.Receipt receipt = new EscPos58.Receipt();
-        receipt.storeName = "ABELEKTRONIK";
-        receipt.date = "15/09/2026 22.00";
+        receipt.storeName = "Toko Cabang";
+        receipt.address = "Jalan Raya Cirebon Bandung No. 1";
+        receipt.date = "16 Sep 2026 12.00";
         receipt.transactionCode = "TRX-001";
         receipt.category = "keluar";
         receipt.total = 30000;
@@ -39,6 +40,10 @@ public class EscPos58Test {
 
         byte[] bytes = EscPos58.receipt(receipt);
         String printable = new String(bytes, StandardCharsets.US_ASCII);
+        assertTrue(printable.contains("ABELEKTRONIK"));
+        assertTrue(printable.contains("listrik, sparepart tv, audio"));
+        assertTrue(printable.contains("Barang keluar / penjualan"));
+        assertTrue(printable.contains("kebijakan retur toko."));
         assertTrue(printable.contains("TRX-001"));
         assertTrue(printable.contains("Rp 30.000"));
         assertTrue(containsSequence(bytes, new int[] { 0x1D, 0x6B, 73 }));
