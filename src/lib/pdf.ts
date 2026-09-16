@@ -2,6 +2,7 @@ import type jsPDF from 'jspdf'
 
 import { dateTimeLabel, formatCurrency } from '@/lib/format'
 import { playReceiptPdfAnimation } from '@/lib/receipt-animation'
+import { playReceiptPrintAnimation } from '@/lib/receipt-print-animation'
 import { buildReceiptPdfMatchedPrintDocument } from '@/lib/receipt-print-template'
 import { isNativeAndroid, requestThermalReceiptPrint } from '@/lib/thermal-printer'
 import type { CartItem, HistoryItem, Product, RevenueRow, StoreRecord, TransactionCategory } from '@/lib/types'
@@ -185,7 +186,7 @@ export function printReceiptWindow(
   popup.document.close()
 
   void (async () => {
-    await playReceiptPdfAnimation(store, items, category)
+    await playReceiptPrintAnimation(store, items, category)
     if (popup.closed) return
     popup.document.open()
     popup.document.write(buildReceiptPdfMatchedPrintDocument(store, items, category))
