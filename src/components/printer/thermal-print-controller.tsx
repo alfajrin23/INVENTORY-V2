@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import { PrinterSetupDialog } from '@/components/printer/printer-setup-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { playReceiptPdfAnimation } from '@/lib/receipt-animation'
+import { playReceiptPrintAnimation } from '@/lib/receipt-print-animation'
 import {
   isNativeAndroid,
   printReceiptDirect,
@@ -24,10 +24,10 @@ export function ThermalPrintController() {
     if (!request || busy.current) return false
     busy.current = true
     try {
-      // Reuse the exact same receipt animation that runs before Save PDF.
+      // Reuse the exact same visual receipt animation as Save PDF, with print-specific status labels.
       // When setup/reconnect is needed, do not replay the animation for the same pending receipt.
       if (animatedRequest.current !== request) {
-        await playReceiptPdfAnimation(request.store, request.items, request.category)
+        await playReceiptPrintAnimation(request.store, request.items, request.category)
         animatedRequest.current = request
       }
 
