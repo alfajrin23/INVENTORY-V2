@@ -59,47 +59,59 @@ final class EscPos58 {
     static byte[] receipt(Receipt receipt) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         init(out);
+
+        // Header follows the same information hierarchy as the Save PDF receipt.
         align(out, 1);
         bold(out, true);
         size(out, 1, 1);
-        text(out, fit(receipt.storeName == null || receipt.storeName.trim().isEmpty() ? "ABELEKTRONIK" : receipt.storeName) + "\n");
+        text(out, "ABELEKTRONIK\n");
         size(out, 0, 0);
         bold(out, false);
+        text(out, "listrik, sparepart tv, audio,\n");
+        text(out, "mesin cuci, kulkas dll\n");
+
         if (receipt.address != null && !receipt.address.trim().isEmpty()) {
             for (String line : wrap(receipt.address, CHARS_PER_LINE)) text(out, line + "\n");
+        } else {
+            text(out, "-\n");
         }
-        text(out, "\n");
+        if (receipt.date != null && !receipt.date.trim().isEmpty()) text(out, safe(receipt.date) + "\n");
+
         align(out, 0);
-        text(out, row("Tanggal", safe(receipt.date)) + "\n");
-        text(out, row("No transaksi", safe(receipt.transactionCode)) + "\n");
         text(out, repeat('-', CHARS_PER_LINE) + "\n");
 
         for (ReceiptItem item : receipt.items) {
+            bold(out, true);
             for (String line : wrap(item.name, CHARS_PER_LINE)) text(out, line + "\n");
+            bold(out, false);
             String left = item.quantity + " x " + rupiah(item.price);
             text(out, row(left, rupiah(item.total)) + "\n");
         }
 
         text(out, repeat('-', CHARS_PER_LINE) + "\n");
         bold(out, true);
-        text(out, row("TOTAL", rupiah(receipt.total)) + "\n");
+        text(out, row("Total", rupiah(receipt.total)) + "\n");
         bold(out, false);
-        text(out, repeat('-', CHARS_PER_LINE) + "\n");
-        align(out, 1);
-        text(out, "\n" + ("masuk".equals(receipt.category) ? "Barang masuk / restock" : "Barang keluar / penjualan") + "\n");
+        text(out, "\n");
+        text(out, "masuk".equals(receipt.category) ? "Barang masuk / restock\n" : "Barang keluar / penjualan\n");
+        for (String line : wrap("Barang yang sudah dibeli mengikuti kebijakan retur toko.", CHARS_PER_LINE)) {
+            text(out, line + "\n");
+        }
 
+        // Barcode / QR remain optional printer preferences and are appended after the PDF-matched receipt body.
         if (receipt.printBarcode && receipt.transactionCode != null && !receipt.transactionCode.isEmpty()) {
+            align(out, 1);
             text(out, "\n");
             code128(out, receipt.transactionCode, true);
             text(out, receipt.transactionCode + "\n");
         }
         if (receipt.printQr && receipt.transactionCode != null && !receipt.transactionCode.isEmpty()) {
+            align(out, 1);
             text(out, "\n");
             qr(out, receipt.transactionCode, 4);
             text(out, "\n");
         }
 
-        text(out, "Terima kasih\n");
         feed(out, 3);
         return out.toByteArray();
     }
@@ -166,11 +178,8 @@ final class EscPos58 {
 
     private static void qr(ByteArrayOutputStream out, String value, int moduleSize) {
         byte[] data = safe(value).getBytes(TEXT_CHARSET);
-        // Select model 2.
         write(out, 0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00);
-        // Module size.
         write(out, 0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, Math.max(2, Math.min(6, moduleSize)));
-        // Error correction M.
         write(out, 0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31);
         int length = data.length + 3;
         int pL = length & 0xff;
