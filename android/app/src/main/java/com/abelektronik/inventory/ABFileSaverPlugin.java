@@ -1,23 +1,21 @@
 package com.abelektronik.inventory;
 
+import android.app.Activity;
 import android.content.ContentResolver;
-import android.content.ContentValues;
-import android.media.MediaScannerConnection;
+import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
-import android.os.Environment;
-import android.provider.MediaStore;
 import android.util.Base64;
 import android.widget.Toast;
+
+import androidx.activity.result.ActivityResult;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.OutputStream;
 
 @CapacitorPlugin(name = "ABFileSaver")
@@ -34,20 +32,53 @@ public class ABFileSaverPlugin extends Plugin {
             return;
         }
 
+        call.setKeepAlive(true);
+        call.setData(new JSObject()
+            .put("dataUrl", dataUrl)
+            .put("fileName", sanitizeFileName(requestedName))
+            .put("mimeType", mimeType));
+
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType(mimeType);
+        intent.putExtra(Intent.EXTRA_TITLE, sanitizeFileName(requestedName));
+        startActivityForResult(call, intent, "saveFileResult");
+    }
+
+    @ActivityCallback
+    private void saveFileResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+
+        if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
+            call.reject("Penyimpanan dibatalkan oleh pengguna.");
+            call.setKeepAlive(false);
+            return;
+        }
+
+        Uri target = result.getData().getData();
+        JSObject data = call.getData();
+        String dataUrl = data.getString("dataUrl", "");
+        String fileName = data.getString("fileName", "abelektronik-download");
+
         try {
-            final byte[] bytes = decodeDataUrl(dataUrl);
-            final String safeName = sanitizeFileName(requestedName);
-            final SaveResult saved = saveToDownloads(bytes, safeName, mimeType);
+            byte[] bytes = decodeDataUrl(dataUrl);
+            ContentResolver resolver = getContext().getContentResolver();
+            try (OutputStream stream = resolver.openOutputStream(target, "w")) {
+                if (stream == null) throw new IllegalStateException("Dokumen tujuan tidak dapat dibuka.");
+                stream.write(bytes);
+                stream.flush();
+            }
 
-            JSObject result = new JSObject();
-            result.put("uri", saved.uri);
-            result.put("path", saved.path);
-            call.resolve(result);
-
-            showToast("Tersimpan di " + saved.path);
+            JSObject response = new JSObject();
+            response.put("uri", target.toString());
+            response.put("path", fileName);
+            call.resolve(response);
+            showToast("Dokumen berhasil disimpan: " + fileName);
         } catch (Exception error) {
             showToast("Gagal menyimpan file: " + error.getMessage());
-            call.reject("File gagal disimpan ke penyimpanan HP.", error);
+            call.reject("File gagal disimpan ke dokumen yang dipilih.", error);
+        } finally {
+            call.setKeepAlive(false);
         }
     }
 
@@ -64,99 +95,8 @@ public class ABFileSaverPlugin extends Plugin {
         return clean.isEmpty() ? "abelektronik-download" : clean;
     }
 
-    private SaveResult saveToDownloads(byte[] bytes, String fileName, String mimeType) throws Exception {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            return saveWithMediaStore(bytes, fileName, mimeType);
-        }
-        return saveLegacy(bytes, fileName, mimeType);
-    }
-
-    private SaveResult saveWithMediaStore(byte[] bytes, String fileName, String mimeType) throws Exception {
-        ContentResolver resolver = getContext().getContentResolver();
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
-        values.put(MediaStore.MediaColumns.MIME_TYPE, mimeType);
-        values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/ABElektronik");
-        values.put(MediaStore.MediaColumns.IS_PENDING, 1);
-
-        Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-        if (uri == null) {
-            throw new IllegalStateException("Folder Download tidak dapat dibuka.");
-        }
-
-        try {
-            try (OutputStream stream = resolver.openOutputStream(uri, "w")) {
-                if (stream == null) {
-                    throw new IllegalStateException("File output tidak dapat dibuat.");
-                }
-                stream.write(bytes);
-                stream.flush();
-            }
-
-            ContentValues ready = new ContentValues();
-            ready.put(MediaStore.MediaColumns.IS_PENDING, 0);
-            resolver.update(uri, ready, null, null);
-            return new SaveResult(uri.toString(), "Download/ABElektronik/" + fileName);
-        } catch (Exception error) {
-            resolver.delete(uri, null, null);
-            throw error;
-        }
-    }
-
-    @SuppressWarnings("deprecation")
-    private SaveResult saveLegacy(byte[] bytes, String fileName, String mimeType) throws Exception {
-        File downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        File folder = new File(downloads, "ABElektronik");
-        if (!folder.exists() && !folder.mkdirs()) {
-            throw new IllegalStateException("Folder Download/ABElektronik tidak dapat dibuat.");
-        }
-
-        File target = uniqueFile(folder, fileName);
-        try (FileOutputStream stream = new FileOutputStream(target)) {
-            stream.write(bytes);
-            stream.flush();
-        }
-
-        MediaScannerConnection.scanFile(
-            getContext(),
-            new String[] { target.getAbsolutePath() },
-            new String[] { mimeType },
-            null
-        );
-
-        return new SaveResult(Uri.fromFile(target).toString(), "Download/ABElektronik/" + target.getName());
-    }
-
-    private File uniqueFile(File folder, String fileName) {
-        File requested = new File(folder, fileName);
-        if (!requested.exists()) return requested;
-
-        int dot = fileName.lastIndexOf('.');
-        String base = dot > 0 ? fileName.substring(0, dot) : fileName;
-        String extension = dot > 0 ? fileName.substring(dot) : "";
-
-        for (int index = 2; index < 10000; index++) {
-            File candidate = new File(folder, base + "-" + index + extension);
-            if (!candidate.exists()) return candidate;
-        }
-
-        return new File(folder, base + "-" + System.currentTimeMillis() + extension);
-    }
-
     private void showToast(String message) {
         if (getActivity() == null) return;
-        getActivity().runOnUiThread(() ->
-            Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show()
-        );
-    }
-
-    private static class SaveResult {
-        final String uri;
-        final String path;
-
-        SaveResult(String uri, String path) {
-            this.uri = uri;
-            this.path = path;
-        }
+        getActivity().runOnUiThread(() -> Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show());
     }
 }
