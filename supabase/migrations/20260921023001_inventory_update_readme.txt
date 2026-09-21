@@ -1,0 +1,1 @@
+Update 21/09/26: jalankan migration 20260921023000_elc_name_normalization_and_duplicate_audit.sql pada project Supabase Inventory untuk menormalkan nama ELC dan menyediakan view audit duplikat. File ini hanya penanda urutan deployment dan dapat dihapus setelah deployment terverifikasi.
