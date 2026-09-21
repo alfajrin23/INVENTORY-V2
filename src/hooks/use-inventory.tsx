@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
+import { showTransactionSuccessNotification } from '@/lib/android-notifications'
 import { readInventoryCache, writeInventoryCache } from '@/lib/inventory-cache'
 import { getInventoryRepository } from '@/lib/inventory-service'
 import type {
@@ -243,6 +244,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       sessionStorage.setItem('inventory-pending-transaction', JSON.stringify(pending))
       const result = await repository.processTransaction({ ...input, requestId: id })
       mergeResult(result)
+      void showTransactionSuccessNotification(result.history).catch(() => undefined)
       delete pending[signature]
       sessionStorage.setItem('inventory-pending-transaction', JSON.stringify(pending))
       return result.history

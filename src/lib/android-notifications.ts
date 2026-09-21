@@ -1,6 +1,8 @@
+import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
-import type { Product } from '@/lib/types'
+import { formatCurrency } from '@/lib/format'
+import type { HistoryItem, Product } from '@/lib/types'
 
 export const INVENTORY_NOTIFICATION_ID = 2201
 export const INVENTORY_NOTIFICATION_CHANNEL = 'inventory_status_v2'
@@ -8,6 +10,10 @@ export const INVENTORY_NOTIFICATION_ACTIONS = 'inventory_actions'
 export const SHOPPING_NOTIFICATION_ID = 2202
 export const SHOPPING_NOTIFICATION_CHANNEL = 'shopping_mode_v1'
 export const SHOPPING_NOTIFICATION_ACTIONS = 'shopping_actions'
+export const TRANSACTION_NOTIFICATION_CHANNEL = 'transaction_success_v1'
+
+const SMALL_NOTIFICATION_ICON = 'ic_stat_abelektronik'
+const LARGE_NOTIFICATION_ICON = 'ic_notification_abelektronik'
 
 export type ShoppingNotificationItem = {
   name: string
@@ -35,6 +41,20 @@ export function shoppingNotificationContent(items: ShoppingNotificationItem[]) {
     body: `${items.length} barang belum dibeli`,
     inboxList: visible,
   }
+}
+
+export function transactionNotificationContent(items: HistoryItem[]) {
+  const category = items[0]?.kategori ?? 'keluar'
+  const quantity = items.reduce((sum, item) => sum + item.jumlah, 0)
+  const total = items.reduce((sum, item) => sum + item.harga * item.jumlah, 0)
+  const first = items[0]
+  const title = category === 'keluar' ? 'Transaksi penjualan berhasil' : 'Barang masuk berhasil'
+  const body = items.length === 1 && first
+    ? `${first.namaBarang} × ${first.jumlah} · Total ${formatCurrency(total)}`
+    : `${items.length} barang · ${quantity} unit · Total ${formatCurrency(total)}`
+  const inboxList = items.slice(0, 5).map(item => `${item.namaBarang} × ${item.jumlah} · ${formatCurrency(item.harga * item.jumlah)}`)
+  if (items.length > 5) inboxList.push(`+${items.length - 5} barang lainnya`)
+  return { title, body, inboxList }
 }
 
 export async function registerInventoryNotification() {
@@ -65,6 +85,16 @@ export async function registerShoppingNotification() {
     types: [{ id: SHOPPING_NOTIFICATION_ACTIONS, actions: [
       { id: 'open-shopping', title: 'Buka Belanja' },
     ] }],
+  })
+}
+
+export async function registerTransactionNotification() {
+  await LocalNotifications.createChannel({
+    id: TRANSACTION_NOTIFICATION_CHANNEL,
+    name: 'Transaksi Berhasil',
+    description: 'Konfirmasi transaksi barang masuk dan keluar',
+    importance: 4,
+    visibility: 1,
   })
 }
 
@@ -117,8 +147,8 @@ export async function showInventoryNotification(storeName: string, products: Pro
     isExactMandatory: false,
     ongoing: true,
     autoCancel: false,
-    smallIcon: 'ic_stat_inventory',
-    largeIcon: 'ic_inventory_gradient',
+    smallIcon: SMALL_NOTIFICATION_ICON,
+    largeIcon: LARGE_NOTIFICATION_ICON,
     iconColor: '#0D9488',
   }] })
   const delivered = await LocalNotifications.getDeliveredNotifications()
@@ -151,10 +181,38 @@ export async function showShoppingNotification(items: ShoppingNotificationItem[]
     isExactMandatory: false,
     ongoing: true,
     autoCancel: false,
-    smallIcon: 'ic_stat_inventory',
-    largeIcon: 'ic_inventory_gradient',
+    smallIcon: SMALL_NOTIFICATION_ICON,
+    largeIcon: LARGE_NOTIFICATION_ICON,
     iconColor: '#0D9488',
     extra: { destination: 'shopping' },
+  }] })
+  return true
+}
+
+export async function showTransactionSuccessNotification(items: HistoryItem[]) {
+  if (!Capacitor.isNativePlatform() || !items.length) return false
+
+  let permission = await LocalNotifications.checkPermissions()
+  if (permission.display !== 'granted') permission = await LocalNotifications.requestPermissions()
+  if (permission.display !== 'granted') return false
+
+  const enabled = await LocalNotifications.areEnabled()
+  if (!enabled.value) return false
+
+  await registerTransactionNotification()
+  const content = transactionNotificationContent(items)
+  await LocalNotifications.schedule({ notifications: [{
+    id: Math.floor(Date.now() % 2_000_000_000),
+    ...content,
+    channelId: TRANSACTION_NOTIFICATION_CHANNEL,
+    isExactNotification: false,
+    isExactMandatory: false,
+    ongoing: false,
+    autoCancel: true,
+    smallIcon: SMALL_NOTIFICATION_ICON,
+    largeIcon: LARGE_NOTIFICATION_ICON,
+    iconColor: '#0D9488',
+    extra: { destination: 'history', category: items[0]?.kategori },
   }] })
   return true
 }

@@ -7,11 +7,41 @@ import { buildReceiptPdfMatchedPrintDocument } from '@/lib/receipt-print-templat
 import { isNativeAndroid, requestThermalReceiptPrint } from '@/lib/thermal-printer'
 import type { CartItem, HistoryItem, Product, RevenueRow, StoreRecord, TransactionCategory } from '@/lib/types'
 
+type ShoppingPrintItem = {
+  name: string
+  brand: string
+  stock: number
+  suggestedQty: number
+  status: string
+}
+
 function slug(value: string) {
   return value
     .toLocaleLowerCase('id-ID')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function savePdfDocument(doc: jsPDF, fileName: string) {
+  const blob = doc.output('blob')
+  const href = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = href
+  anchor.download = fileName
+  anchor.style.display = 'none'
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(href), 1_500)
 }
 
 function addHeader(doc: jsPDF, title: string, subtitle?: string) {
@@ -68,7 +98,7 @@ export async function downloadRevenuePdf(title: string, rows: RevenueRow[], tota
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.text(`Total: ${formatCurrency(total)}`, 14, y + 8)
-  doc.save(`${slug(title)}.pdf`)
+  savePdfDocument(doc, `${slug(title)}.pdf`)
 }
 
 export async function downloadStockPdf(title: string, products: Product[]) {
@@ -86,7 +116,7 @@ export async function downloadStockPdf(title: string, products: Product[]) {
       formatCurrency(product.harga),
     ]),
   )
-  doc.save(`${slug(title)}.pdf`)
+  savePdfDocument(doc, `${slug(title)}.pdf`)
 }
 
 export async function downloadMovementPdf(title: string, history: HistoryItem[]) {
@@ -103,7 +133,67 @@ export async function downloadMovementPdf(title: string, history: HistoryItem[])
       String(item.jumlah),
     ]),
   )
-  doc.save(`${slug(title)}.pdf`)
+  savePdfDocument(doc, `${slug(title)}.pdf`)
+}
+
+export async function downloadShoppingPdf(title: string, items: ShoppingPrintItem[]) {
+  const { default: jsPDF } = await import('jspdf')
+  const doc = new jsPDF()
+  addHeader(doc, title, `${items.length} barang · ${dateTimeLabel(new Date())}`)
+  drawTable(
+    doc,
+    ['No', 'Nama Barang', 'Brand', 'Stok', 'Saran Beli'],
+    items.map((item, index) => [
+      String(index + 1),
+      item.name,
+      item.brand,
+      String(item.stock),
+      String(item.suggestedQty),
+    ]),
+  )
+  savePdfDocument(doc, `${slug(title)}.pdf`)
+}
+
+export function printShoppingList(title: string, items: ShoppingPrintItem[]) {
+  const popup = window.open('', '_blank', 'width=860,height=900')
+  if (!popup) return false
+
+  const rows = items.map((item, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(item.brand)}</td>
+      <td>${item.stock}</td>
+      <td>${item.suggestedQty}</td>
+      <td>${escapeHtml(item.status)}</td>
+    </tr>`).join('')
+
+  popup.document.open()
+  popup.document.write(`<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(title)}</title>
+<style>
+  body{font-family:Arial,sans-serif;color:#111827;margin:28px}
+  h1{font-size:22px;margin:0 0 4px}
+  p{margin:0 0 18px;color:#4b5563}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{border:1px solid #d1d5db;padding:7px;text-align:left}
+  th{background:#f3f4f6}
+  td:nth-child(1),td:nth-child(4),td:nth-child(5){text-align:center}
+  @media print{body{margin:12mm}button{display:none}}
+</style>
+</head>
+<body>
+<h1>${escapeHtml(title)}</h1>
+<p>${items.length} barang · ${escapeHtml(dateTimeLabel(new Date()))}</p>
+<table><thead><tr><th>No</th><th>Nama Barang</th><th>Brand</th><th>Stok</th><th>Saran Beli</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+<script>window.addEventListener('load',()=>{setTimeout(()=>window.print(),120)})</script>
+</body></html>`)
+  popup.document.close()
+  popup.focus()
+  return true
 }
 
 export async function downloadReceiptPdf(
@@ -164,7 +254,7 @@ export async function downloadReceiptPdf(
   doc.setFont('helvetica', 'normal')
   doc.text(category === 'keluar' ? 'Barang keluar / penjualan' : 'Barang masuk / restock', 8, y + 18)
   doc.text('Barang yang sudah dibeli mengikuti kebijakan retur toko.', 8, y + 28, { maxWidth: 64 })
-  doc.save(`resi-${slug(storeName)}.pdf`)
+  savePdfDocument(doc, `resi-${slug(storeName)}.pdf`)
 }
 
 export function printReceiptWindow(

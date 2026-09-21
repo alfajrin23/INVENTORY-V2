@@ -48,18 +48,19 @@ function bodySummary(body: string) {
 function fallbackNote(version: string): ReleaseNote {
   return {
     version,
-    title: 'Yang Baru di Inventory V2',
+    title: 'Yang Baru di Inventory V2 · 21/09/26',
     publishedAt: new Date().toISOString(),
     source: 'fallback',
     summary: [
-      'Printer Thermal: direct Bluetooth ESC/POS 58 mm dan dukungan XANTRI BT-58D PRO.',
-      'Scanner: semua hasil pencarian dapat diakses dan tersedia Voice Search.',
-      'Barcode: kode custom pendek seperti 1, 12, 123, 001, A1, dan L01 memakai CODE128.',
-      'Belanja: daftar restock, qty pembelian, Shopping Mode, dan notifikasi Android.',
-      'Laporan: tab pendapatan lebih responsif di layar kecil.',
-      'Pembaruan: catatan versi tersimpan lokal dan hanya muncul sekali per versi di perangkat.',
+      'Data ELC dinormalisasi menjadi format tegangan lebih dulu, contoh ELC 160V 100uf.',
+      'Audit duplikat disiapkan berdasarkan nama barang yang sama dan harga yang sama.',
+      'Belanja Stok sekarang bisa diurutkan A–Z/Z–A, stok, dan jumlah saran beli, serta dapat dicetak atau disimpan PDF.',
+      'Export PDF Android sekarang membuka pemilih dokumen agar pengguna menentukan nama dan lokasi penyimpanan.',
+      'Transaksi berhasil mengirim notifikasi Android berisi nama barang, qty, dan total transaksi.',
+      'Ikon notifikasi Android memakai identitas ABElektronik/AB mahkota.',
+      'Pendapatan mendapat opsi pengurutan transaksi berdasarkan tanggal, nama barang, qty terjual, dan nilai transaksi.',
     ],
-    body: 'Pembaruan ini memprioritaskan direct print thermal 58 mm, scanner yang lebih mudah dibaca, custom barcode, mode belanja/restock, perbaikan laporan, dan catatan pembaruan aplikasi.',
+    body: 'Update 21/09/26 berfokus pada kerapihan data ELC, audit duplikat, penyortiran laporan dan belanja, alur PDF Android, notifikasi transaksi, serta branding notifikasi ABElektronik.',
   }
 }
 
