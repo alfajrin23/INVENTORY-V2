@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { LocalNotifications } from '@capacitor/local-notifications'
-import { Check, CheckCircle2, Flame, PackageCheck, PackageX, Search, ShoppingCart, TriangleAlert } from 'lucide-react'
+import { Check, CheckCircle2, FileDown, Flame, PackageCheck, PackageX, Printer, Search, ShoppingCart, TriangleAlert } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -13,14 +13,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { clearShoppingNotification, showShoppingNotification } from '@/lib/android-notifications'
 import { formatNumber } from '@/lib/format'
+import { downloadShoppingPdf, printShoppingList } from '@/lib/pdf'
 import { buildRestockRecommendations, type RestockRecommendation, type RestockStatus } from '@/lib/restock'
 import { cn } from '@/lib/utils'
 
 type ShoppingFilter = 'semua' | RestockStatus
+type ShoppingSort = 'priority' | 'name-asc' | 'name-desc' | 'stock-asc' | 'stock-desc' | 'suggested-desc'
 
 type CompletedShoppingItem = {
   id: string
@@ -71,11 +74,22 @@ function StatusIcon({ status }: { status: RestockStatus }) {
   return <Flame className="size-4" />
 }
 
+function sortRecommendations(items: RestockRecommendation[], sort: ShoppingSort) {
+  const next = [...items]
+  if (sort === 'name-asc') return next.sort((a, b) => a.name.localeCompare(b.name, 'id-ID', { numeric: true }))
+  if (sort === 'name-desc') return next.sort((a, b) => b.name.localeCompare(a.name, 'id-ID', { numeric: true }))
+  if (sort === 'stock-asc') return next.sort((a, b) => a.stock - b.stock || a.name.localeCompare(b.name, 'id-ID'))
+  if (sort === 'stock-desc') return next.sort((a, b) => b.stock - a.stock || a.name.localeCompare(b.name, 'id-ID'))
+  if (sort === 'suggested-desc') return next.sort((a, b) => b.suggestedQty - a.suggestedQty || a.name.localeCompare(b.name, 'id-ID'))
+  return next.sort((a, b) => b.priority - a.priority || b.suggestedQty - a.suggestedQty || b.sold30 - a.sold30)
+}
+
 export function ShoppingPage() {
   const { activeStore, products, history, processTransaction, loading } = useInventory()
   const { showToast } = useToast()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ShoppingFilter>('semua')
+  const [sort, setSort] = useState<ShoppingSort>('priority')
   const [mode, setMode] = useState<ShoppingModeState>(EMPTY_MODE)
   const [selected, setSelected] = useState<RestockRecommendation | null>(null)
   const [quantity, setQuantity] = useState(1)
@@ -111,12 +125,13 @@ export function ShoppingPage() {
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('id-ID')
-    return recommendations.filter(item => {
+    const matches = recommendations.filter(item => {
       if (filter !== 'semua' && item.status !== filter) return false
       if (!needle) return true
       return `${item.name} ${item.brand} ${item.barcode}`.toLocaleLowerCase('id-ID').includes(needle)
     })
-  }, [filter, query, recommendations])
+    return sortRecommendations(matches, sort)
+  }, [filter, query, recommendations, sort])
 
   const startMode = async () => {
     setNotificationMessage('')
@@ -201,22 +216,28 @@ export function ShoppingPage() {
             </div>
           </div>
 
-          {mode.active ? (
-            <div role="status" className="flex min-h-11 items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] px-3 text-sm font-bold text-emerald-100">
-              <span className="size-2.5 animate-pulse rounded-full bg-emerald-300 motion-reduce:animate-none" />
-              Mode Belanja Aktif
-            </div>
-          ) : (
-            <Button type="button" className="min-h-12 bg-amber-300 text-base font-bold text-slate-950 hover:bg-amber-200" onClick={() => void startMode()}>
-              <ShoppingCart className="size-5" />
-              Mulai Mode Belanja
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" className="min-h-11 border-white/15" disabled={!filtered.length} onClick={() => printShoppingList('Daftar Belanja Stok', filtered)}>
+              <Printer className="size-4" /> Cetak
             </Button>
-          )}
+            <Button type="button" variant="outline" className="min-h-11 border-white/15" disabled={!filtered.length} onClick={() => void downloadShoppingPdf('Daftar Belanja Stok', filtered)}>
+              <FileDown className="size-4" /> PDF
+            </Button>
+            {mode.active ? (
+              <div role="status" className="flex min-h-11 items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-300/[0.08] px-3 text-sm font-bold text-emerald-100">
+                <span className="size-2.5 animate-pulse rounded-full bg-emerald-300 motion-reduce:animate-none" /> Mode Belanja Aktif
+              </div>
+            ) : (
+              <Button type="button" className="min-h-11 bg-amber-300 font-bold text-slate-950 hover:bg-amber-200" onClick={() => void startMode()}>
+                <ShoppingCart className="size-5" /> Mulai Mode Belanja
+              </Button>
+            )}
+          </div>
         </div>
 
         {notificationMessage ? <p role="status" className="mt-3 rounded-xl border border-amber-300/20 bg-amber-300/[0.07] p-3 text-sm text-amber-100">{notificationMessage}</p> : null}
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+        <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(0,1fr)_13rem_auto] xl:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-white/38" />
             <Input
@@ -227,6 +248,17 @@ export function ShoppingPage() {
               className="h-12 border-white/12 bg-black/15 pl-11 text-base text-white placeholder:text-white/38"
             />
           </div>
+          <Select value={sort} onValueChange={value => setSort(value as ShoppingSort)}>
+            <SelectTrigger aria-label="Urutkan daftar belanja" className="h-12 border-white/12 bg-black/15 text-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="priority">Prioritas restock</SelectItem>
+              <SelectItem value="name-asc">Nama A–Z</SelectItem>
+              <SelectItem value="name-desc">Nama Z–A</SelectItem>
+              <SelectItem value="stock-asc">Stok tersedikit</SelectItem>
+              <SelectItem value="stock-desc">Stok terbanyak</SelectItem>
+              <SelectItem value="suggested-desc">Saran beli terbanyak</SelectItem>
+            </SelectContent>
+          </Select>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Filter belanja stok">
             {([
               ['semua', 'Semua'],
@@ -234,14 +266,7 @@ export function ShoppingPage() {
               ['kritis', 'Menipis'],
               ['laris', 'Laris'],
             ] as const).map(([value, label]) => (
-              <Button
-                key={value}
-                type="button"
-                variant={filter === value ? 'default' : 'outline'}
-                aria-pressed={filter === value}
-                className="min-h-11 whitespace-nowrap border-white/15"
-                onClick={() => setFilter(value)}
-              >
+              <Button key={value} type="button" variant={filter === value ? 'default' : 'outline'} aria-pressed={filter === value} className="min-h-11 whitespace-nowrap border-white/15" onClick={() => setFilter(value)}>
                 {label}
               </Button>
             ))}
@@ -252,23 +277,14 @@ export function ShoppingPage() {
       <section aria-label="Daftar barang yang perlu dibeli" className="space-y-2">
         {filtered.map(item => (
           <article key={item.id} className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-white/10 bg-[#151a22] p-3.5 shadow-sm">
-            <button
-              type="button"
-              aria-label={`Tandai ${item.name} sudah dibeli`}
-              onClick={() => openQuantity(item)}
-              className="flex size-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/25 text-white/55 outline-none transition hover:border-emerald-300 hover:text-emerald-200 focus-visible:ring-2 focus-visible:ring-emerald-200"
-            >
+            <button type="button" aria-label={`Tandai ${item.name} sudah dibeli`} onClick={() => openQuantity(item)} className="flex size-11 shrink-0 items-center justify-center rounded-xl border-2 border-white/25 text-white/55 outline-none transition hover:border-emerald-300 hover:text-emerald-200 focus-visible:ring-2 focus-visible:ring-emerald-200">
               <Check className="size-5" />
             </button>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-bold text-white sm:text-lg">{item.name}</h2>
-                <span className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold',
-                  item.status === 'habis' ? 'bg-rose-300/14 text-rose-100' : item.status === 'kritis' ? 'bg-amber-300/14 text-amber-100' : 'bg-cyan-300/14 text-cyan-100',
-                )}>
-                  <StatusIcon status={item.status} />
-                  {statusLabel(item.status)}
+                <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold', item.status === 'habis' ? 'bg-rose-300/14 text-rose-100' : item.status === 'kritis' ? 'bg-amber-300/14 text-amber-100' : 'bg-cyan-300/14 text-cyan-100')}>
+                  <StatusIcon status={item.status} /> {statusLabel(item.status)}
                 </span>
               </div>
               <p className="mt-0.5 text-sm text-slate-300">{item.brand} · <span className="font-mono text-xs text-slate-400">{item.barcode}</span></p>
@@ -291,10 +307,7 @@ export function ShoppingPage() {
 
       {mode.completed.length ? (
         <section className="rounded-3xl border border-white/10 bg-white/[0.035] p-4" aria-labelledby="shopping-completed-title">
-          <h2 id="shopping-completed-title" className="flex items-center gap-2 text-lg font-bold text-white">
-            <CheckCircle2 className="size-5 text-emerald-300" />
-            Sudah dibeli ({mode.completed.length})
-          </h2>
+          <h2 id="shopping-completed-title" className="flex items-center gap-2 text-lg font-bold text-white"><CheckCircle2 className="size-5 text-emerald-300" /> Sudah dibeli ({mode.completed.length})</h2>
           <div className="mt-3 space-y-2">
             {mode.completed.map(item => (
               <div key={`${item.id}-${item.completedAt}`} className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5 text-sm">
@@ -308,8 +321,7 @@ export function ShoppingPage() {
 
       {mode.active ? (
         <Button type="button" variant="outline" className="min-h-12 w-full border-emerald-300/30 bg-emerald-300/[0.06] text-base font-bold text-emerald-100" onClick={() => void finishMode()}>
-          <CheckCircle2 className="size-5" />
-          Selesaikan Belanja
+          <CheckCircle2 className="size-5" /> Selesaikan Belanja
         </Button>
       ) : null}
 
@@ -327,22 +339,16 @@ export function ShoppingPage() {
               </div>
               <div className="grid grid-cols-[3rem_minmax(0,1fr)_3rem] gap-2">
                 <Button type="button" variant="outline" className="min-h-12 border-white/15 text-xl" aria-label="Kurangi jumlah" onClick={() => setQuantity(value => Math.max(1, value - 1))}>−</Button>
-                <Input
-                  aria-label="Jumlah barang dibeli"
-                  type="number"
-                  min={1}
-                  max={1_000_000}
-                  value={quantity}
-                  onChange={event => setQuantity(Number(event.target.value))}
-                  className="h-12 border-white/15 bg-black/20 text-center text-xl font-bold text-white"
-                />
+                <Input aria-label="Jumlah barang dibeli" type="number" min={1} max={1_000_000} value={quantity} onChange={event => setQuantity(Number(event.target.value))} className="h-12 border-white/15 bg-black/20 text-center text-xl font-bold text-white" />
                 <Button type="button" variant="outline" className="min-h-12 border-white/15 text-xl" aria-label="Tambah jumlah" onClick={() => setQuantity(value => Math.min(1_000_000, value + 1))}>+</Button>
               </div>
             </div>
           ) : null}
-          <DialogFooter className="gap-2 sm:grid sm:grid-cols-2">
-            <Button type="button" variant="outline" className="min-h-11 border-white/15" disabled={saving} onClick={() => setSelected(null)}>Batal</Button>
-            <Button type="button" className="min-h-11" disabled={saving} onClick={() => void confirmRestock()}>{saving ? 'Menyimpan…' : 'Tambah ke Stok'}</Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className="border-white/15" disabled={saving} onClick={() => setSelected(null)}>Batal</Button>
+            <Button type="button" className="bg-emerald-300 font-bold text-slate-950 hover:bg-emerald-200" disabled={saving || !selected} onClick={() => void confirmRestock()}>
+              {saving ? 'Menyimpan…' : 'Tambah ke Stok'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
