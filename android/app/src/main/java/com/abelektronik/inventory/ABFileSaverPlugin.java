@@ -32,12 +32,6 @@ public class ABFileSaverPlugin extends Plugin {
             return;
         }
 
-        call.setKeepAlive(true);
-        call.setData(new JSObject()
-            .put("dataUrl", dataUrl)
-            .put("fileName", sanitizeFileName(requestedName))
-            .put("mimeType", mimeType));
-
         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType(mimeType);
@@ -51,14 +45,12 @@ public class ABFileSaverPlugin extends Plugin {
 
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) {
             call.reject("Penyimpanan dibatalkan oleh pengguna.");
-            call.setKeepAlive(false);
             return;
         }
 
         Uri target = result.getData().getData();
-        JSObject data = call.getData();
-        String dataUrl = data.getString("dataUrl", "");
-        String fileName = data.getString("fileName", "abelektronik-download");
+        String dataUrl = call.getString("dataUrl", "");
+        String fileName = sanitizeFileName(call.getString("fileName", "abelektronik-download"));
 
         try {
             byte[] bytes = decodeDataUrl(dataUrl);
@@ -77,8 +69,6 @@ public class ABFileSaverPlugin extends Plugin {
         } catch (Exception error) {
             showToast("Gagal menyimpan file: " + error.getMessage());
             call.reject("File gagal disimpan ke dokumen yang dipilih.", error);
-        } finally {
-            call.setKeepAlive(false);
         }
     }
 
