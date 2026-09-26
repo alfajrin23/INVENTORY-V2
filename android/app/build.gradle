@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
-def appVersionCode = (System.getenv('AB_VERSION_CODE') ?: '4').toInteger()
-def appVersionName = System.getenv('AB_VERSION_NAME') ?: '1.2.0'
+def appVersionCode = (System.getenv('AB_VERSION_CODE') ?: '5').toInteger()
+def appVersionName = System.getenv('AB_VERSION_NAME') ?: '1.2.1'
 def releaseStoreFile = System.getenv('AB_RELEASE_STORE_FILE')
 def releaseStorePassword = System.getenv('AB_RELEASE_STORE_PASSWORD')
 def releaseKeyAlias = System.getenv('AB_RELEASE_KEY_ALIAS')

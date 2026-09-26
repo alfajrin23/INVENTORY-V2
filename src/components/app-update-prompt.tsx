@@ -14,6 +14,7 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { ABAppUpdate } from '@/lib/android-app-update'
+import { fallbackReleaseSummary, summarizeReleaseBody } from '@/lib/release-notes'
 
 const RELEASES_URL = 'https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=10'
 const UPDATE_CHECK_KEY = 'ab:last-update-check-at'
@@ -37,7 +38,7 @@ type GitHubRelease = {
 type AvailableUpdate = {
   version: string
   title: string
-  notes: string
+  notes: string[]
   apkUrl: string
 }
 
@@ -92,15 +93,6 @@ function compareVersions(left: string, right: string) {
   return 0
 }
 
-function summarizeNotes(body: string | null) {
-  const text = (body ?? '')
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/[#>*_`~-]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return text.slice(0, 420)
-}
-
 async function findAvailableUpdate(currentVersion: string): Promise<AvailableUpdate | null> {
   const response = await fetch(RELEASES_URL, {
     headers: { Accept: 'application/vnd.github+json' },
@@ -116,10 +108,11 @@ async function findAvailableUpdate(currentVersion: string): Promise<AvailableUpd
       if (!apk) return null
       const version = release.tag_name.replace(/^v/i, '')
       if (compareVersions(version, currentVersion) <= 0) return null
+      const notes = summarizeReleaseBody(release.body)
       return {
         version,
         title: release.name?.trim() || `Versi ${version}`,
-        notes: summarizeNotes(release.body),
+        notes: notes.length ? notes : fallbackReleaseSummary(),
         apkUrl: apk.browser_download_url,
       } satisfies AvailableUpdate
     })
@@ -237,7 +230,7 @@ export function AppUpdatePrompt() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="border-white/12 bg-[#121827]/98 text-white shadow-2xl sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto border-white/12 bg-[#121827]/98 text-white shadow-2xl sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">
             <Download className="size-5 text-emerald-300" />
@@ -248,11 +241,17 @@ export function AppUpdatePrompt() {
           </DialogDescription>
         </DialogHeader>
 
-        {update.notes ? (
-          <p className="rounded-xl border border-white/10 bg-white/[0.055] p-3 text-sm leading-6 text-white/70">
-            {update.notes}
-          </p>
-        ) : null}
+        <section className="max-h-48 overflow-y-auto rounded-xl border border-white/10 bg-white/[0.055] p-3" aria-label="Catatan pembaruan">
+          <p className="text-sm font-bold text-white">Yang Baru</p>
+          <ul className="mt-2 space-y-2">
+            {update.notes.map((note, index) => (
+              <li key={`${index}-${note}`} className="flex gap-2 text-sm leading-6 text-white/72">
+                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-emerald-300" aria-hidden="true" />
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         {installing ? (
           <div className="space-y-2">

@@ -14,6 +14,10 @@ function slug(value: string) {
     .replace(/(^-|-$)/g, '')
 }
 
+function receiptBrand(item: CartItem) {
+  return item.product.brand?.trim() ?? ''
+}
+
 function addHeader(doc: jsPDF, title: string, subtitle?: string) {
   doc.setFillColor(18, 28, 48)
   doc.rect(0, 0, 210, 34, 'F')
@@ -121,7 +125,7 @@ export async function downloadReceiptPdf(
       Math.max(
         180,
         110 + items.reduce(
-          (height, item) => height + 15 + Math.ceil(item.product.namaBarang.length / 24) * 4,
+          (height, item) => height + 15 + Math.ceil(item.product.namaBarang.length / 24) * 4 + (receiptBrand(item) ? 4 : 0),
           0,
         ),
       ),
@@ -147,11 +151,16 @@ export async function downloadReceiptPdf(
 
   let y = 39
   items.forEach((item) => {
+    const brand = receiptBrand(item)
     doc.setFont('helvetica', 'bold')
     const lines = doc.splitTextToSize(item.product.namaBarang, 64) as string[]
     doc.text(lines, 8, y)
     y += (lines.length - 1) * 4
     doc.setFont('helvetica', 'normal')
+    if (brand) {
+      doc.text(brand, 8, y + 5)
+      y += 4
+    }
     doc.text(`${item.quantity} x ${formatCurrency(item.product.harga)}`, 8, y + 5)
     doc.text(formatCurrency(item.product.harga * item.quantity), 72, y + 5, { align: 'right' })
     y += 13

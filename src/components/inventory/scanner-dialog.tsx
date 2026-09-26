@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useDebouncedValue } from '@/hooks/use-debounced-value'
 import { extractBarcodeValue, normalizeBarcodeValue } from '@/lib/barcode-product-reference'
-import { matchProduct } from '@/lib/format'
+import { formatCurrency, matchProduct } from '@/lib/format'
 import type { Product } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -409,7 +409,11 @@ export function ScannerDialog({
               <p className="text-sm text-slate-500 dark:text-white/50">Produk cepat</p>
             )}
             <div className="space-y-2" role="list" aria-label="Hasil pencarian produk">
-              {suggestions.map((product) => (
+              {suggestions.map((product) => {
+                const brand = product.brand?.trim()
+                const price = formatCurrency(Number(product.harga ?? 0))
+
+                return (
                 <button
                   type="button"
                   role="listitem"
@@ -419,7 +423,8 @@ export function ScannerDialog({
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block text-base font-bold leading-5 text-slate-950 dark:text-white">{product.namaBarang}</span>
-                    <span className="mt-1 block text-sm text-slate-600 dark:text-slate-300">{product.brand}</span>
+                    {brand ? <span className="mt-1 block text-sm text-slate-600 dark:text-slate-300">{brand}</span> : null}
+                    <span className="mt-1 block font-mono text-sm font-semibold text-cyan-700 dark:text-cyan-100">{price}</span>
                     <span className="mt-1 block truncate font-mono text-xs text-slate-500 dark:text-slate-400">{product.barcode}</span>
                   </span>
                   <span className={cn(
@@ -429,7 +434,8 @@ export function ScannerDialog({
                     Stok {product.stok}
                   </span>
                 </button>
-              ))}
+                )
+              })}
             </div>
             {allSuggestions.length > suggestions.length ? (
               <Button type="button" variant="outline" className="min-h-11 w-full" onClick={() => setVisibleCount(count => count + INITIAL_RESULT_LIMIT)}>

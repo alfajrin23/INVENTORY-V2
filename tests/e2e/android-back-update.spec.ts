@@ -114,6 +114,8 @@ test('Android updater popup downloads the newer GitHub Release through the nativ
   const updateDialog = page.getByRole('dialog')
   await expect(updateDialog).toContainText('Update aplikasi tersedia')
   await expect(updateDialog).toContainText('versi 1.3.0')
+  await expect(updateDialog).toContainText('Yang Baru')
+  await expect(updateDialog).toContainText('Perbaikan dan fitur baru.')
 
   await updateDialog.getByRole('button', { name: 'Update sekarang' }).click()
   await expect.poll(() => page.evaluate(() => (window as BackAwareWindow).nativeCalls

@@ -209,6 +209,15 @@ function receiptAnimationCss() {
       margin-top: 2px;
       color: #64748b;
     }
+    .abe-item em {
+      display: block;
+      margin-top: 2px;
+      color: #475569;
+      font-style: normal;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .abe-summary {
       display: grid;
       gap: 3px;
@@ -405,15 +414,20 @@ function receiptMarkup(
   const code = receiptCode()
   const visibleItems = items.slice(0, 6)
   const hiddenCount = Math.max(0, items.length - visibleItems.length)
-  const rows = visibleItems.map(item => `
+  const rows = visibleItems.map(item => {
+    const brand = item.product.brand?.trim()
+
+    return `
     <div class="abe-item">
       <div>
         <strong>${item.quantity}X ${escapeHtml(item.product.namaBarang)}</strong>
+        ${brand ? `<em>${escapeHtml(brand)}</em>` : ''}
         <span>${escapeHtml(formatCurrency(item.product.harga))} / unit</span>
       </div>
       <strong>${escapeHtml(formatCurrency(item.product.harga * item.quantity))}</strong>
     </div>
-  `).join('')
+  `
+  }).join('')
 
   return `
     <div class="abe-anim-overlay" data-testid="receipt-print-animation">
@@ -563,6 +577,7 @@ export function buildReceiptPrintAnimationDocument(
       .abe-address,
       .abe-amount small,
       .abe-item,
+      .abe-item em,
       .abe-summary,
       .abe-kind,
       .abe-thanks,

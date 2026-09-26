@@ -36,13 +36,14 @@ public class EscPos58Test {
         receipt.total = 30000;
         receipt.printBarcode = true;
         receipt.printQr = true;
-        receipt.items = Arrays.asList(new EscPos58.ReceiptItem("Lampu LED", 2, 15000, 30000));
+        receipt.items = Arrays.asList(new EscPos58.ReceiptItem("Lampu LED", "Philips", 2, 15000, 30000));
 
         byte[] bytes = EscPos58.receipt(receipt);
         String printable = new String(bytes, StandardCharsets.US_ASCII);
         assertTrue(printable.contains("ABELEKTRONIK"));
         assertTrue(printable.contains("listrik, sparepart tv, audio"));
         assertTrue(printable.contains("Barang keluar / penjualan"));
+        assertTrue(printable.contains("Philips"));
         assertTrue(printable.contains("kebijakan retur toko."));
         assertTrue(printable.contains("TRX-001"));
         assertTrue(printable.contains("Rp 30.000"));

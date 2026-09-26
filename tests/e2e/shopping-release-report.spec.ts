@@ -55,13 +55,17 @@ test('Shopping Mode survives reload per store and finish clears local active sta
 
 test('release notes appears once per installed version and appears again when version marker changes', async ({ page }) => {
   await page.route('https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=10', route => route.fulfill({ status: 200, json: [] }))
-  await page.addInitScript(() => localStorage.removeItem('ab:last-seen-release-notes-version:v1'))
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('ab:release-notes-reset-once')) return
+    localStorage.removeItem('ab:last-seen-release-notes-version:v1')
+    sessionStorage.setItem('ab:release-notes-reset-once', 'true')
+  })
   await page.goto('/')
 
   const whatsNew = page.getByRole('dialog').filter({ hasText: 'Yang Baru di Inventory V2' })
   await expect(whatsNew).toBeVisible()
   await whatsNew.getByRole('button', { name: 'Mengerti' }).click()
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab:last-seen-release-notes-version:v1'))).toBe('1.1.0-beta.2')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab:last-seen-release-notes-version:v1'))).toBe('1.2.1')
 
   await page.reload()
   await page.waitForTimeout(1200)

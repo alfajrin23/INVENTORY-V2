@@ -143,4 +143,5 @@ test('transaction receipt direct prints through native ESC/POS with barcode and 
   await expect.poll(async () => (await calls(page)).some(call => call.plugin === 'ABThermalPrinter' && call.method === 'printReceipt')).toBe(true)
   const receiptCall = (await calls(page)).find(call => call.plugin === 'ABThermalPrinter' && call.method === 'printReceipt')
   expect(receiptCall?.options).toMatchObject({ receipt: { printBarcode: true, printQr: true } })
+  expect(receiptCall?.options).toMatchObject({ receipt: { items: [{ brand: 'Anker' }] } })
 })

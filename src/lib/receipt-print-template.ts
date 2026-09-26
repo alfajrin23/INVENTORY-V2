@@ -16,15 +16,20 @@ export function buildReceiptPdfMatchedPrintDocument(
   category: TransactionCategory,
 ) {
   const total = items.reduce((sum, item) => sum + item.product.harga * item.quantity, 0)
-  const rows = items.map(item => `
+  const rows = items.map(item => {
+    const brand = item.product.brand?.trim()
+
+    return `
     <section class="item">
       <strong class="item-name">${escapeHtml(item.product.namaBarang)}</strong>
+      ${brand ? `<span class="item-brand">${escapeHtml(brand)}</span>` : ''}
       <div class="item-row">
         <span>${item.quantity} x ${escapeHtml(formatCurrency(item.product.harga))}</span>
         <strong>${escapeHtml(formatCurrency(item.product.harga * item.quantity))}</strong>
       </div>
     </section>
-  `).join('')
+  `
+  }).join('')
 
   return `<!doctype html>
 <html lang="id">
@@ -60,6 +65,7 @@ export function buildReceiptPdfMatchedPrintDocument(
       .divider { margin: 3mm 0 2.5mm; border: 0; border-top: .25mm solid #1c2230; }
       .items { display: grid; gap: 3mm; }
       .item-name { display: block; font-size: 7.5pt; line-height: 1.35; overflow-wrap: anywhere; }
+      .item-brand { display: block; margin-top: .8mm; color: #4b5563; font-size: 7pt; line-height: 1.25; overflow-wrap: anywhere; }
       .item-row { display: flex; justify-content: space-between; gap: 3mm; margin-top: 1.3mm; font-size: 7.5pt; }
       .item-row strong { text-align: right; white-space: nowrap; }
       .total { display: flex; justify-content: space-between; gap: 3mm; margin-top: 2mm; font-size: 8pt; font-weight: 700; }

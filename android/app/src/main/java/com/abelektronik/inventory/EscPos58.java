@@ -12,12 +12,14 @@ final class EscPos58 {
 
     static final class ReceiptItem {
         final String name;
+        final String brand;
         final int quantity;
         final long price;
         final long total;
 
-        ReceiptItem(String name, int quantity, long price, long total) {
+        ReceiptItem(String name, String brand, int quantity, long price, long total) {
             this.name = name;
+            this.brand = brand;
             this.quantity = quantity;
             this.price = price;
             this.total = total;
@@ -84,6 +86,10 @@ final class EscPos58 {
             bold(out, true);
             for (String line : wrap(item.name, CHARS_PER_LINE)) text(out, line + "\n");
             bold(out, false);
+            String brand = safe(item.brand);
+            if (!brand.isEmpty()) {
+                for (String line : wrap(brand, CHARS_PER_LINE)) text(out, line + "\n");
+            }
             String left = item.quantity + " x " + rupiah(item.price);
             text(out, row(left, rupiah(item.total)) + "\n");
         }

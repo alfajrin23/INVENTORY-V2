@@ -103,8 +103,8 @@ export function isWithinDateRange(value: string, start: Date, end: Date) {
   return date >= start && date <= end
 }
 
-export function normalizeSearch(value: string) {
-  return value.trim().toLocaleLowerCase('id-ID')
+export function normalizeSearch(value: string | null | undefined) {
+  return (value ?? '').trim().toLocaleLowerCase('id-ID')
 }
 
 export function matchProduct(product: Product, query: string) {

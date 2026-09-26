@@ -28,6 +28,7 @@ type SavedPrinterResult = { printer: ThermalPrinterDevice | null }
 
 type ReceiptLine = {
   name: string
+  brand: string
   quantity: number
   price: number
   total: number
@@ -195,6 +196,7 @@ export async function printReceiptDirect(
         total,
         items: items.map(item => ({
           name: item.product.namaBarang,
+          brand: item.product.brand?.trim() ?? '',
           quantity: item.quantity,
           price: item.product.harga,
           total: item.product.harga * item.quantity,

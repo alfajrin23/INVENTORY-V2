@@ -310,6 +310,7 @@ public class ABThermalPrinterPlugin extends Plugin {
                         if (item == null) continue;
                         receipt.items.add(new EscPos58.ReceiptItem(
                             item.optString("name", "Barang"),
+                            item.optString("brand", ""),
                             Math.max(1, item.optInt("quantity", 1)),
                             Math.round(item.optDouble("price", 0)),
                             Math.round(item.optDouble("total", 0))

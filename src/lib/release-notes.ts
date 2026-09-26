@@ -6,6 +6,11 @@ const RELEASES_URL = 'https://api.github.com/repos/alfajrin23/INVENTORY-V2/relea
 const CACHE_KEY = 'ab:release-notes-cache:v1'
 export const LAST_SEEN_RELEASE_NOTES_KEY = 'ab:last-seen-release-notes-version:v1'
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const CURRENT_RELEASE_SUMMARY = [
+  'Harga barang sekarang ditampilkan pada hasil pencarian di Scanner.',
+  'Informasi merek barang sekarang ikut tercetak pada resi transaksi.',
+  'Peningkatan tampilan dan stabilitas aplikasi.',
+]
 
 export type ReleaseNote = {
   version: string
@@ -34,8 +39,9 @@ function normalizeVersion(value: string) {
   return value.trim().replace(/^v/i, '')
 }
 
-function bodySummary(body: string) {
-  const lines = body
+export function summarizeReleaseBody(body: string | null | undefined) {
+  const lines = (body ?? '')
+    .replace(/```[\s\S]*?```/g, '')
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean)
@@ -45,21 +51,18 @@ function bodySummary(body: string) {
   return lines.slice(0, 8)
 }
 
+export function fallbackReleaseSummary() {
+  return [...CURRENT_RELEASE_SUMMARY]
+}
+
 function fallbackNote(version: string): ReleaseNote {
   return {
     version,
-    title: 'Yang Baru di Inventory V2',
+    title: `Yang Baru di Inventory V2 ${version}`,
     publishedAt: new Date().toISOString(),
     source: 'fallback',
-    summary: [
-      'Printer Thermal: direct Bluetooth ESC/POS 58 mm dan dukungan XANTRI BT-58D PRO.',
-      'Scanner: semua hasil pencarian dapat diakses dan tersedia Voice Search.',
-      'Barcode: kode custom pendek seperti 1, 12, 123, 001, A1, dan L01 memakai CODE128.',
-      'Belanja: daftar restock, qty pembelian, Shopping Mode, dan notifikasi Android.',
-      'Laporan: tab pendapatan lebih responsif di layar kecil.',
-      'Pembaruan: catatan versi tersimpan lokal dan hanya muncul sekali per versi di perangkat.',
-    ],
-    body: 'Pembaruan ini memprioritaskan direct print thermal 58 mm, scanner yang lebih mudah dibaca, custom barcode, mode belanja/restock, perbaikan laporan, dan catatan pembaruan aplikasi.',
+    summary: fallbackReleaseSummary(),
+    body: CURRENT_RELEASE_SUMMARY.join('\n'),
   }
 }
 
@@ -116,7 +119,7 @@ export async function loadReleaseNotes(force = false): Promise<ReleaseNote[]> {
           version: normalizeVersion(release.tag_name ?? ''),
           title: release.name?.trim() || `Inventory V2 ${normalizeVersion(release.tag_name ?? '')}`,
           publishedAt: release.published_at ?? '',
-          summary: bodySummary(body),
+          summary: summarizeReleaseBody(body),
           body,
           source: 'github',
         }

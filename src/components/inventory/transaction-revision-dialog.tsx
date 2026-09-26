@@ -1,4 +1,4 @@
-import { Pencil, Save, Trash2, X } from 'lucide-react'
+import { Pencil, Printer, Save, Trash2, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -10,13 +10,47 @@ import { Textarea } from '@/components/ui/textarea'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/format'
-import type { HistoryItem, TransactionCategory } from '@/lib/types'
+import { printReceiptWindow } from '@/lib/pdf'
+import type { CartItem, HistoryItem, Product, TransactionCategory } from '@/lib/types'
 
 export type RevisionAction = 'edit' | 'delete'
 
+function cleanText(value: string | null | undefined) {
+  return value?.trim() ?? ''
+}
+
+function safePrice(value: number) {
+  return Number.isFinite(value) ? value : 0
+}
+
+function historyToCartItem(item: HistoryItem, fallbackProduct?: Product): CartItem {
+  return {
+    product: {
+      id: item.productId ?? item.id,
+      namaBarang: item.namaBarang,
+      brand: cleanText(item.brand) || cleanText(fallbackProduct?.brand),
+      harga: safePrice(Number(item.harga)),
+      stok: fallbackProduct?.stok ?? Math.max(1, item.jumlah),
+      barcode: item.barcode,
+      storeId: item.storeId,
+      createdAt: item.tanggal,
+      updatedAt: item.updatedAt,
+    },
+    quantity: Math.max(1, Math.trunc(Number(item.jumlah) || 1)),
+  }
+}
+
 export function TransactionActions({ item, onAction }: { item: HistoryItem; onAction: (item: HistoryItem, action: RevisionAction) => void }) {
+  const { activeStore, products } = useInventory()
+  const fallbackProduct = products.find(product => product.id === item.productId)
+    ?? (!item.productId ? products.find(product => product.barcode === item.barcode && product.storeId === item.storeId) : undefined)
+  const printHistoryReceipt = () => {
+    printReceiptWindow(activeStore, [historyToCartItem(item, fallbackProduct)], item.kategori)
+  }
+
   return <div className="flex items-center justify-end gap-1">
     <Button type="button" variant="ghost" size="icon" aria-label={`Edit transaksi ${item.namaBarang}`} title="Edit transaksi" onClick={() => onAction(item, 'edit')} className="text-cyan-100 hover:bg-cyan-300/12"><Pencil className="size-4" /></Button>
+    <Button type="button" variant="ghost" size="icon" aria-label={`Print resi ${item.namaBarang}`} title="Print resi" onClick={printHistoryReceipt} className="text-emerald-100 hover:bg-emerald-300/12"><Printer className="size-4" /></Button>
     <Button type="button" variant="ghost" size="icon" aria-label={`Hapus transaksi ${item.namaBarang}`} title="Hapus transaksi" onClick={() => onAction(item, 'delete')} className="text-rose-200 hover:bg-rose-300/12"><Trash2 className="size-4" /></Button>
   </div>
 }

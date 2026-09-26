@@ -362,7 +362,7 @@ export function SettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-xl border border-white/10 bg-white/[0.06] p-4 text-sm text-white/62">
-            Versi 1.1.0-beta.2 (c) by Al Fajrin A Alamsyah 2025
+            Versi {__APP_VERSION__} (c) by Al Fajrin A Alamsyah 2025
           </div>
           <DialogFooter>
             <Button type="button" onClick={() => setAboutOpen(false)}>

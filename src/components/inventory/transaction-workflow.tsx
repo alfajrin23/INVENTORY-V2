@@ -378,17 +378,22 @@ function ReceiptPreview({ items, category }: { items: CartItem[]; category: Tran
       </div>
       <Separator className="my-4 bg-slate-200" />
       <div className="space-y-3">
-        {items.map((item) => (
+        {items.map((item) => {
+          const brand = item.product.brand?.trim()
+
+          return (
           <div key={item.product.id} className="grid grid-cols-[1fr_auto] gap-3 text-sm">
             <div>
               <p className="font-semibold">{item.product.namaBarang}</p>
+              {brand ? <p className="text-xs text-slate-500">{brand}</p> : null}
               <p className="text-xs text-slate-500">
                 {item.quantity} x {formatCurrency(item.product.harga)}
               </p>
             </div>
             <p className="font-mono font-semibold">{formatCurrency(item.product.harga * item.quantity)}</p>
           </div>
-        ))}
+          )
+        })}
       </div>
       <Separator className="my-4 bg-slate-200" />
       <div className="flex items-center justify-between font-bold">

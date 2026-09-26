@@ -504,6 +504,8 @@ test('scanner fallback, missing barcode, cart, receipt PDF and print',async ({pa
   await page.getByRole('button',{name:'Scan',exact:true}).click()
   await expect(page.getByRole('dialog')).toBeVisible()
   await expect(page.getByRole('button',{name:'Tutup scanner'})).toHaveCount(1)
+  await page.getByRole('textbox',{name:'Pencarian produk'}).fill('charger')
+  await expect(page.getByRole('list',{name:'Hasil pencarian produk'})).toContainText('Rp 185.000')
   await expect(page.locator('.scanner-target-frame')).toBeVisible()
   await expect.poll(() => page.locator('.scanner-target-frame').evaluate((frame) => {
     const frameBox = frame.getBoundingClientRect()
@@ -524,6 +526,8 @@ test('scanner fallback, missing barcode, cart, receipt PDF and print',async ({pa
   await page.getByRole('button',{name:'Lihat Resi'}).click()
   const download=page.waitForEvent('download');await page.getByRole('button',{name:'Save PDF',exact:true}).click();expect((await download).suggestedFilename()).toContain('resi')
   const popup=page.waitForEvent('popup');await page.getByRole('button',{name:'Print Resi'}).click();expect(await popup).toBeTruthy()
+  await page.goto('/history.html')
+  const historyPopup=page.waitForEvent('popup');await page.getByRole('button',{name:/Print resi/}).first().click();expect(await historyPopup).toBeTruthy()
 })
 
 test('report PDF exports and theme',async ({page})=>{
