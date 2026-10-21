@@ -59,6 +59,7 @@ export const navigationItems: NavigationItem[] = [
 export const mobileNavigation = [
   { label: 'Home', path: routes.dashboard, icon: Home },
   { label: 'Barang', path: routes.products, icon: Package },
+  { label: 'QRIS', path: routes.qrisHistory, icon: QrCode },
   { label: 'Laporan', path: routes.reports, icon: TrendingUp },
   { label: 'Setelan', path: routes.settings, icon: Settings },
 ]

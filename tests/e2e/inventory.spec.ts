@@ -238,12 +238,16 @@ for (const width of [320,360,375,390,412,430,768,1440]) {
   })
 }
 
-test('mobile bottom navigation and desktop navigation', async ({ page }) => {
+test('mobile bottom navigation exposes QRIS history and desktop navigation works', async ({ page }) => {
   await page.setViewportSize({width:390,height:844}); await page.goto('/')
-  for (const [name,url] of [['Barang','databarang'],['Laporan','laporan'],['Setelan','pengaturan'],['Home','/']]) {
+  for (const [name,url] of [['Barang','databarang'],['QRIS','qris'],['Laporan','laporan'],['Setelan','pengaturan'],['Home','/']]) {
     await page.getByRole('navigation',{name:'Navigasi mobile'}).getByRole('link',{name,exact:true}).click()
     await expect(page).toHaveURL(new RegExp(url))
   }
+  await page.getByRole('navigation',{name:'Navigasi mobile'}).getByRole('link',{name:'QRIS',exact:true}).click()
+  await expect(page.getByRole('heading',{name:'Riwayat Transaksi QRIS'})).toBeVisible()
+  await page.setViewportSize({width:320,height:740})
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.setViewportSize({width:1440,height:900})
   await page.locator('aside').getByRole('link',{name:'History Barang',exact:true}).click()
   await expect(page.getByRole('heading',{name:'History Barang'})).toBeVisible()

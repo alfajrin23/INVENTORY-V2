@@ -1007,7 +1007,7 @@ html.light [data-slot="dialog-content"] {
   .guide-scanner-shot {
     max-width: none;
   }
-  .mobile-bottom-nav { bottom: max(.75rem, env(safe-area-inset-bottom)); border-radius: 2rem; grid-template-columns: 1fr 1fr 64px 1fr 1fr; }
+  .mobile-bottom-nav { bottom: max(.75rem, env(safe-area-inset-bottom)); border-radius: 2rem; grid-template-columns: repeat(5, minmax(0, 1fr)); }
   [data-glass-panel] { backdrop-filter: none; box-shadow: 0 5px 20px #00000012; border-radius: 1rem; }
   .dashboard-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
   .metric-card { padding: .875rem; min-height: 130px; }
@@ -1063,9 +1063,7 @@ html.light .recharts-cartesian-grid line { stroke: #c5ded7; }
   .mobile-bottom-nav a[aria-current="page"], html.light .mobile-bottom-nav a[aria-current="page"] { color:var(--mobile-primary); }
   .mobile-bottom-nav a span.relative { width:39px; height:35px; border-radius:13px; }
   .mobile-bottom-nav a svg { width:17px; height:17px; }
-  .mobile-bottom-nav .nav-voice { width:40px; height:40px; min-height:40px; margin:0 auto 2px; transform:none; border-radius:14px; background:var(--mobile-primary); color:var(--mobile-primary-fg); box-shadow:0 3px 9px #071d111c; }
-  .mobile-bottom-nav .nav-voice::after { content:'Voice AI'; position:absolute; top:43px; white-space:nowrap; font-size:10px; font-weight:700; color:var(--mobile-primary); }
-  .mobile-bottom-nav .nav-voice svg { width:17px; height:17px; }
+  .mobile-voice-fab { position:fixed; display:flex!important; right:max(16px,calc((100vw - 640px)/2 + 16px)); bottom:calc(86px + env(safe-area-inset-bottom)); z-index:45; width:44px; height:44px; min-height:44px; padding:0; border:0; border-radius:50%; background:var(--mobile-primary); color:var(--mobile-primary-fg); box-shadow:0 4px 12px #071d1128; }
   .mobile-page-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:14px 2px 18px; }
   .mobile-page-heading h1 { margin:0; color:var(--mobile-text); font-size:27px; line-height:1.16; letter-spacing:-.035em; font-weight:700; }
   .mobile-page-heading p { margin:5px 0 0; color:var(--mobile-muted); font-size:13px; line-height:1.4; }

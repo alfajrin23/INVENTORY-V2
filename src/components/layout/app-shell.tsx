@@ -386,18 +386,18 @@ export function AppShell() {
         </AnimatePresence>
       </main>
 
-      <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_1fr_72px_1fr_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
-        {mobileNavigation.slice(0, 2).map((item) => (
-          <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />
-        ))}
-        <button
-          type="button"
-          aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)}
-          className="nav-voice -mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition-[transform,box-shadow] duration-200 hover:scale-[1.03] active:scale-95"
-        >
-          <Mic className="size-5" />
-        </button>
-        {mobileNavigation.slice(2).map((item) => (
+      <Button
+        type="button"
+        aria-label="Buka Voice AI"
+        title="Voice AI"
+        onClick={() => setVoiceOpen(true)}
+        className="mobile-voice-fab fixed bottom-24 right-4 z-40 hidden size-12 items-center justify-center rounded-full bg-teal-700 text-white shadow-lg lg:hidden"
+      >
+        <Mic className="size-5" />
+      </Button>
+
+      <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-5 items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
+        {mobileNavigation.map((item) => (
           <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />
         ))}
       </nav>

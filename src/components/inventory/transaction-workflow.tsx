@@ -75,6 +75,23 @@ function clampQuantity(value: number, max: number, category: TransactionCategory
   return Math.floor(value)
 }
 
+async function qrisFunctionErrorMessage(error: unknown) {
+  const failure = error as { message?: unknown; context?: unknown } | null
+  const response = failure?.context
+  if (response instanceof Response) {
+    const body = await response.clone().json().catch(() => null) as { error?: unknown; message?: unknown } | null
+    if (typeof body?.error === 'string') return body.error
+    if (typeof body?.message === 'string') return body.message
+    return `Layanan QRIS merespons HTTP ${response.status}.`
+  }
+
+  const message = typeof failure?.message === 'string' ? failure.message : ''
+  if (/failed to send a request to the edge function/i.test(message)) {
+    return 'Layanan QRIS tidak dapat dihubungi. Periksa koneksi internet dan pastikan Edge Function create-qris-payment sudah di-deploy pada project Supabase aplikasi.'
+  }
+  return message || 'QRIS gagal dibuat. Periksa koneksi dan konfigurasi pembayaran.'
+}
+
 export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpen, onVoiceOpenChange }: TransactionWorkflowProps) {
   const navigate = useNavigate()
   const { products, activeStore, processTransaction, addProduct: createInventoryProduct, refresh } = useInventory()
@@ -228,7 +245,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
           items: items.map(item => ({ productId: item.product.id, quantity: item.quantity })),
         },
       })
-      if (error) throw new Error(error.message || 'QRIS gagal dibuat. Periksa koneksi dan konfigurasi pembayaran.')
+      if (error) throw new Error(await qrisFunctionErrorMessage(error))
       if (!data || typeof data.qrString !== 'string' || typeof data.id !== 'string' || Number(data.amount) !== total) {
         throw new Error('QRIS dari server tidak sesuai dengan total keranjang. Transaksi belum dibuat.')
       }

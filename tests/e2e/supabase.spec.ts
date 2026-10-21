@@ -193,3 +193,56 @@ test('product data appears while transaction history is still loading', async ({
     await expect(page.getByText('Pendapatan Hari Ini')).toBeVisible()
   } finally { releaseHistory() }
 })
+
+test('QRIS checkout explains an unreachable Edge Function and keeps stock untouched', async ({ page }) => {
+  const uid = '00000000-0000-4000-8000-000000000001'
+  const store = '00000000-0000-4000-8000-000000000010'
+  const product = '00000000-0000-4000-8000-000000000020'
+  const token = [{ alg: 'HS256', typ: 'JWT' }, { sub: uid, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }, 'signature']
+    .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.')
+  const user = { id: uid, aud: 'authenticated', role: 'authenticated', email: 'owner@example.test', created_at: new Date().toISOString(), app_metadata: {}, user_metadata: {} }
+  const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS', 'content-type': 'application/json' }
+  let qrisRequests = 0
+  let inventoryTransactions = 0
+
+  await page.route('http://127.0.0.1:54321/**', async route => {
+    const url = new URL(route.request().url())
+    const method = route.request().method()
+    if (method === 'OPTIONS') { await route.fulfill({ status: 200, headers, body: '' }); return }
+    if (url.pathname === '/auth/v1/token') { await route.fulfill({ headers, json: { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } }); return }
+    if (url.pathname === '/auth/v1/user') { await route.fulfill({ headers, json: user }); return }
+    if (url.pathname === '/rest/v1/stores') {
+      await route.fulfill({ headers, json: [{ id: store, owner_id: uid, name: 'Toko QRIS', address: '', address_link: '', created_at: new Date().toISOString() }] })
+      return
+    }
+    if (url.pathname === '/rest/v1/products') {
+      await route.fulfill({ headers, json: [{ id: product, store_id: store, nama_barang: 'Lampu QRIS', brand: 'Philips', harga: 15000, stok: 5, barcode: '987', created_at: new Date().toISOString() }] })
+      return
+    }
+    if (url.pathname === '/rest/v1/history' || url.pathname === '/rest/v1/audit_logs') { await route.fulfill({ headers, json: [] }); return }
+    if (url.pathname === '/rest/v1/rpc/process_inventory_transaction') { inventoryTransactions += 1 }
+    if (url.pathname === '/functions/v1/create-qris-payment') {
+      if (method === 'POST') qrisRequests += 1
+      await route.abort('failed')
+      return
+    }
+    await route.fulfill({ status: 400, headers, json: { message: `Unexpected request: ${method} ${url.pathname}` } })
+  })
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.addInitScript(id => localStorage.setItem('activeStoreId', id), store)
+  await page.goto('/')
+  await page.getByLabel('Email', { exact: true }).fill('owner@example.test')
+  await page.getByLabel('Password', { exact: true }).fill('test-password')
+  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  await expect(page.getByText('Toko QRIS').first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'Scan', exact: true }).click()
+  await page.getByLabel('Input barcode manual').fill('987')
+  await page.getByRole('button', { name: 'Cari barcode' }).click()
+  await page.getByRole('button', { name: 'Proses', exact: true }).click()
+  await page.getByRole('button', { name: /^QRIS/ }).click()
+  await expect(page.getByText(/Edge Function create-qris-payment sudah di-deploy/)).toBeVisible()
+  expect(qrisRequests).toBe(1)
+  expect(inventoryTransactions).toBe(0)
+})
