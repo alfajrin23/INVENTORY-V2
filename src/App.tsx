@@ -16,6 +16,7 @@ import { routes } from '@/lib/navigation'
 const loadDashboardPage = () => import('@/pages/dashboard-page')
 const loadProductsPage = () => import('@/pages/products-with-tools-page')
 const loadHistoryPage = () => import('@/pages/history-page')
+const loadQrisHistoryPage = () => import('@/pages/qris-history-page')
 const loadReportsHubPage = () => import('@/pages/reports-hub-page')
 const loadSettingsPage = () => import('@/pages/settings-with-guide-page')
 const loadLogsInputPage = () => import('@/pages/logs-input-page')
@@ -28,6 +29,7 @@ const loadUpdateHistoryPage = () => import('@/pages/update-history-page')
 const DashboardPage = lazy(() => loadDashboardPage().then((module) => ({ default: module.DashboardPage })))
 const ProductsPage = lazy(() => loadProductsPage().then((module) => ({ default: module.ProductsWithToolsPage })))
 const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: module.HistoryPage })))
+const QrisHistoryPage = lazy(() => loadQrisHistoryPage().then((module) => ({ default: module.QrisHistoryPage })))
 const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsWithGuidePage })))
 const LogsInputPage = lazy(() => loadLogsInputPage().then((module) => ({ default: module.LogsInputPage })))
@@ -95,6 +97,7 @@ function App() {
                   <Route path="/index.html" element={<DashboardPage />} />
                   <Route path={routes.products} element={<ProductsPage />} />
                   <Route path={routes.history} element={<HistoryPage />} />
+                  <Route path={routes.qrisHistory} element={<QrisHistoryPage />} />
                   <Route path={routes.reports} element={<ReportsHubPage />} />
                   <Route path={routes.incomingReport} element={<IncomingReportPage />} />
                   <Route path={routes.outgoingReport} element={<OutgoingReportPage />} />

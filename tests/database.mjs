@@ -11,7 +11,7 @@ const other = '00000000-0000-4000-8000-000000000002'
 const store = '00000000-0000-4000-8000-000000000010'
 const p1 = '00000000-0000-4000-8000-000000000020'
 const p2 = '00000000-0000-4000-8000-000000000021'
-await db.exec(`create role anon; create role authenticated; create schema auth;
+await db.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth;
   create table auth.users(id uuid primary key);
   create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
   grant usage on schema auth,public to authenticated,anon;
@@ -20,6 +20,9 @@ await db.exec(`create role anon; create role authenticated; create schema auth;
 for (const file of ['001_inventory_schema.sql', '002_inventory_transaction_rpc.sql', '003_transaction_revision_audit.sql', '004_performance_tuning.sql', '005_user_profiles.sql', '20260914024812_fix_transaction_delete_stock_rollback.sql']) {
   await db.exec(await readFile(new URL(`../supabase/migrations/${file}`, import.meta.url), 'utf8'))
 }
+await db.exec(`create table public.app_branding(id text primary key, profile_photo_url text);
+  insert into public.app_branding(id) values('default');`)
+await db.exec(await readFile(new URL('../supabase/migrations/20261021031316_qris_payment_integration.sql', import.meta.url), 'utf8'))
 await db.exec(`set request.jwt.claim.sub='${owner}'; set role authenticated;
   insert into public.stores(id,name) values('${store}','Test');
   insert into public.products(id,store_id,nama_barang,brand,harga,stok,barcode) values
@@ -81,6 +84,43 @@ assert.deepEqual(await stock(), [1,2])
 const incoming = (await db.query("select id, updated_at from history where kategori='masuk' and jumlah=5 limit 1")).rows[0]
 await assert.rejects(revise(incoming, revisedSale, true), /Stok tidak cukup/)
 assert.deepEqual(await stock(), [1,2])
+const qrisRequestId = crypto.randomUUID()
+const qrisOrderId = `TEST-${crypto.randomUUID()}`
+const qrisCreate = (requestId, orderId, expectedAmount, items, createdBy = owner) => db.query(
+  'select public.create_qris_payment_record($1,$2,$3,$4,$5,$6::jsonb) as result',
+  [store, createdBy, requestId, orderId, expectedAmount, JSON.stringify(items)])
+await db.exec('reset role; set role service_role;')
+await assert.rejects(qrisCreate(crypto.randomUUID(), `TEST-${crypto.randomUUID()}`, 1, [{productId:p2,quantity:1}]), /Total pembayaran berubah/)
+await assert.rejects(qrisCreate(crypto.randomUUID(), `TEST-${crypto.randomUUID()}`, 20000, [{productId:p2,quantity:1}], other), /tidak ditemukan atau akses ditolak/)
+const pendingQris = await qrisCreate(qrisRequestId, qrisOrderId, 20000, [{productId:p2,quantity:1}])
+const qrisPaymentId = pendingQris.rows[0].result.id
+await db.exec(`set role authenticated; set request.jwt.claim.sub='${owner}';`)
+assert.equal((await db.query("select status from qris_payments where id=$1", [qrisPaymentId])).rows[0].status, 'creating')
+await assert.rejects(db.query('select qris_string from qris_payments where id=$1', [qrisPaymentId]), /permission denied/)
+await assert.rejects(db.exec(`update qris_payments set status='paid' where id='${qrisPaymentId}'`), /permission denied/)
+await assert.rejects(call([{productId:p2,quantity:2}]), /Stok ditahan untuk QRIS/)
+assert.deepEqual(await stock(), [1,2])
+await db.exec('reset role;')
+await db.query('update public.products set harga=25000 where id=$1', [p2])
+await db.exec('set role service_role;')
+await assert.rejects(db.query('select public.settle_qris_payment($1,$2,$3)', [qrisOrderId, 'midtrans-test-1', 25000]), /Nominal notifikasi QRIS tidak sesuai/)
+const settledQris = await db.query('select public.settle_qris_payment($1,$2,$3) as result', [qrisOrderId, 'midtrans-test-1', 20000])
+assert.equal(settledQris.rows[0].result.status, 'paid')
+await db.exec(`reset role; set role authenticated; set request.jwt.claim.sub='${owner}';`)
+assert.deepEqual(await stock(), [1,1])
+assert.equal(Number((await db.query("select harga from history where keterangan like 'Penjualan QRIS Midtrans %'")).rows[0].harga), 20000)
+await db.exec('reset role; set role service_role;')
+const duplicateQris = await db.query('select public.settle_qris_payment($1,$2,$3) as result', [qrisOrderId, 'midtrans-test-1', 20000])
+assert.equal(duplicateQris.rows[0].result.duplicate, true)
+await db.exec(`reset role; set role authenticated; set request.jwt.claim.sub='${owner}';`)
+assert.deepEqual(await stock(), [1,1])
+await db.exec('reset role;')
+await db.query("update public.products set harga=20000, stok=2 where id=$1", [p2])
+await db.query("delete from public.history where keterangan like 'Penjualan QRIS Midtrans %'")
+await db.query('delete from public.inventory_requests where id=$1', [qrisPaymentId])
+await db.query('delete from public.qris_payments where id=$1', [qrisPaymentId])
+await db.exec(`set role authenticated; set request.jwt.claim.sub='${owner}';`)
+assert.deepEqual(await stock(), [1,2]); assert.equal(await count(),3)
 await db.exec(`set request.jwt.claim.sub='${other}'`)
 assert.equal((await db.query('select * from stores')).rows.length,0)
 assert.equal((await db.query('select * from products')).rows.length,0)
@@ -106,4 +146,4 @@ try {
   assert.deepEqual(await stock(),[4]); assert.equal(await count(),1)
 } finally { await unlink(input); await unlink(output).catch(()=>{}); await rmdir(temp) }
 await db.close()
-console.log('PASS: migrations, stock in/out, atomic rollback, idempotency, transaction revision/deletion and conflict, negative-stock protection, audit RLS, tenant isolation, offline import and overwrite protection.')
+console.log('PASS: migrations, cash/QRS stock holds, QRIS price snapshots, settlement idempotency, QR code access protection, stock in/out, atomic rollback, transaction revision/deletion and conflict, negative-stock protection, audit RLS, tenant isolation, offline import and overwrite protection.')

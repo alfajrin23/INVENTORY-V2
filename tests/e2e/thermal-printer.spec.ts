@@ -136,6 +136,7 @@ test('transaction receipt direct prints through native ESC/POS with barcode and 
   await page.getByRole('button', { name: 'Cari barcode' }).click()
   await expect(page.getByRole('heading', { name: 'Keranjang Transaksi' })).toBeVisible()
   await page.getByRole('button', { name: 'Proses', exact: true }).click()
+  await page.getByRole('button', { name: /Tunai/ }).click()
   await expect(page.getByRole('heading', { name: 'Transaksi selesai' })).toBeVisible()
   await page.getByRole('button', { name: 'Lihat Resi' }).click()
   await page.getByRole('button', { name: 'Print Resi' }).click()

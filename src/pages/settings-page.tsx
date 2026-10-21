@@ -1,5 +1,5 @@
-import { Bell, ChevronRight, Database, History, Info, LogOut, MessageCircle, Moon, Save, ScrollText, ShieldCheck, Store, Sun, UserCog, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Bell, ChevronRight, Database, History, Image, Info, LogOut, MessageCircle, Moon, QrCode, Save, ScrollText, ShieldCheck, Store, Sun, Upload, UserCog, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
@@ -18,6 +18,7 @@ import { useThemeMode } from '@/hooks/use-theme-mode'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
+import { fetchQrisImage, uploadQrisImage } from '@/lib/media-storage'
 import { demoEnabled, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -46,8 +47,37 @@ export function SettingsPage() {
   const [accountSaving, setAccountSaving] = useState(false)
   const [accountError, setAccountError] = useState('')
   const [accountNotice, setAccountNotice] = useState('')
+  const [qrisImage, setQrisImage] = useState('/qris-base.jpg')
+  const [qrisUploading, setQrisUploading] = useState(false)
+  const qrisFileInput = useRef<HTMLInputElement>(null)
   const { theme, toggleTheme } = useThemeMode()
   const { showToast } = useToast()
+
+  useEffect(() => {
+    if (!supabase || demoEnabled) return
+    let alive = true
+    void fetchQrisImage().then(url => { if (alive && url) setQrisImage(url) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const handleQrisImageChange = async (file: File | undefined) => {
+    if (!file) return
+    if (!supabase || demoEnabled) {
+      showToast('Simpan gambar QRIS memerlukan koneksi Supabase aktif.', 'error')
+      return
+    }
+    setQrisUploading(true)
+    try {
+      const url = await uploadQrisImage(file)
+      setQrisImage(url)
+      showToast('Gambar referensi QRIS berhasil diperbarui.', 'success')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gambar QRIS gagal disimpan.', 'error')
+    } finally {
+      setQrisUploading(false)
+      if (qrisFileInput.current) qrisFileInput.current.value = ''
+    }
+  }
 
   useEffect(() => {
     if (!accountOpen || !supabase || demoEnabled) return
@@ -173,6 +203,21 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
+      <GlassPanel className="grid gap-4 p-4 sm:grid-cols-[9rem_1fr] sm:items-center" glow="cyan">
+        <div className="flex min-h-32 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white p-2">
+          <img src={qrisImage} alt="Gambar referensi QRIS ABElektronik" className="max-h-44 w-full object-contain" />
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-cyan-100"><QrCode className="size-5" /><h2 className="font-semibold">Pengaturan QRIS</h2></div>
+          <p className="text-sm text-white/62">Ganti gambar QRIS referensi toko. Pembayaran dinamis per transaksi tetap dibuat oleh GoPay/Midtrans; gambar ini tidak dipakai sebagai QR pembayaran otomatis.</p>
+          <input ref={qrisFileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => void handleQrisImageChange(event.target.files?.[0])} />
+          <Button type="button" variant="outline" disabled={qrisUploading || demoEnabled || !supabase} onClick={() => qrisFileInput.current?.click()}>
+            {qrisUploading ? <Image className="size-4 animate-pulse" /> : <Upload className="size-4" />}
+            {qrisUploading ? 'Menyimpan gambar…' : 'Ganti gambar QRIS'}
+          </Button>
+          {demoEnabled ? <p className="text-xs text-amber-100/70">Mode demo: penyimpanan gambar perlu koneksi Supabase.</p> : null}
+        </div>
+      </GlassPanel>
       <div className="mobile-settings lg:hidden">
         <div className="mobile-page-heading">
           <div>
@@ -244,6 +289,14 @@ export function SettingsPage() {
             </span>
             <ChevronRight size={17} />
           </Link>
+          <Link to={routes.qrisHistory} className="settings-row">
+            <span className="settings-icon info"><QrCode /></span>
+            <span>
+              <strong>Riwayat QRIS</strong>
+              <small>Status pembayaran GoPay/QRIS</small>
+            </span>
+            <ChevronRight size={17} />
+          </Link>
           <Link to={routes.logsInput} className="settings-row">
             <span className="settings-icon incoming"><ScrollText /></span>
             <span>
@@ -287,6 +340,12 @@ export function SettingsPage() {
           <Link to={routes.history}>
             <History className="size-4" />
             History Barang
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.qrisHistory}>
+            <QrCode className="size-4" />
+            Riwayat QRIS
           </Link>
         </Button>
         <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">

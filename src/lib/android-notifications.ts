@@ -129,6 +129,25 @@ export async function showInventoryNotification(storeName: string, products: Pro
   return true
 }
 
+export async function showQrisPaymentNotification(storeName: string, amount: string) {
+  const permission = await LocalNotifications.checkPermissions()
+  if (permission.display !== 'granted') return false
+  const enabled = await LocalNotifications.areEnabled()
+  if (!enabled.value) return false
+
+  await LocalNotifications.schedule({ notifications: [{
+    id: 2300 + Math.floor(Math.random() * 100000),
+    title: `${storeName} - Pembayaran QRIS berhasil`,
+    body: `Dana ${amount} telah terkonfirmasi masuk melalui GoPay/QRIS.`,
+    channelId: INVENTORY_NOTIFICATION_CHANNEL,
+    smallIcon: 'ic_stat_inventory',
+    largeIcon: 'ic_inventory_gradient',
+    iconColor: '#0D9488',
+    autoCancel: true,
+  }] })
+  return true
+}
+
 export async function showShoppingNotification(items: ShoppingNotificationItem[]) {
   if (!items.length) {
     await clearShoppingNotification()

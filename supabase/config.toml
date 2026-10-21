@@ -1,0 +1,22 @@
+
+[functions.create-qris-payment]
+enabled = true
+verify_jwt = true
+import_map = "./functions/create-qris-payment/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/create-qris-payment/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/create-qris-payment/*.html" ]
+
+[functions.midtrans-qris-notification]
+enabled = true
+verify_jwt = false
+import_map = "./functions/midtrans-qris-notification/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/midtrans-qris-notification/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/midtrans-qris-notification/*.html" ]

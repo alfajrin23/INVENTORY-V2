@@ -55,3 +55,28 @@ export async function uploadBrandingPhoto(file: File) {
   if (error) throw databaseError(error)
   return publicUrl
 }
+
+export async function fetchQrisImage() {
+  const { data, error } = await requireSupabase()
+    .from('app_branding')
+    .select('qris_image_url')
+    .eq('id', 'default')
+    .single()
+
+  if (error) throw databaseError(error)
+  return typeof data.qris_image_url === 'string' ? data.qris_image_url : ''
+}
+
+export async function uploadQrisImage(file: File) {
+  const client = requireSupabase()
+  const publicUrl = await uploadPublicImage('branding/qris-base', file)
+  const { error } = await client
+    .from('app_branding')
+    .update({ qris_image_url: publicUrl })
+    .eq('id', 'default')
+    .select('id')
+    .single()
+
+  if (error) throw databaseError(error)
+  return publicUrl
+}

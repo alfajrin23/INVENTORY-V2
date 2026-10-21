@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Banknote,
   CheckCircle2,
   CreditCard,
   FileText,
@@ -7,12 +8,14 @@ import {
   Minus,
   Plus,
   Printer,
+  QrCode,
   Receipt,
   ScanLine,
   ShoppingCart,
   Trash2,
 } from 'lucide-react'
-import { lazy, Suspense, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { useNavigate } from 'react-router-dom'
 
 import { ScannerDialog } from '@/components/inventory/scanner-dialog'
@@ -32,10 +35,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
+import { prepareInventoryNotification, showQrisPaymentNotification } from '@/lib/android-notifications'
 import { dateTimeLabel, formatCurrency } from '@/lib/format'
+import { demoEnabled, supabase } from '@/lib/supabase'
+import { maximizeQrBrightness, restoreQrBrightness } from '@/lib/screen-brightness'
 import { routes } from '@/lib/navigation'
 import { downloadReceiptPdf, printReceiptWindow } from '@/lib/pdf'
-import type { CartItem, HistoryItem, Product, ProductInput, TransactionCategory } from '@/lib/types'
+import type { CartItem, Product, ProductInput, TransactionCategory } from '@/lib/types'
 
 const VoiceDialog = lazy(() => import('./voice-dialog').then(m => ({ default: m.VoiceDialog })))
 
@@ -45,6 +51,16 @@ type TransactionWorkflowProps = {
   scannerOpen: boolean
   onScannerOpenChange: (open: boolean) => void
 }
+
+type QrisPaymentDisplay = {
+  id: string
+  orderId: string
+  amount: number
+  qrString: string
+  expiresAt: string
+}
+
+type QrisPaymentStatus = 'creating' | 'pending' | 'paid' | 'expired' | 'failed' | 'inventory_error'
 
 function clampQuantity(value: number, max: number, category: TransactionCategory) {
   if (!Number.isFinite(value) || value < 1) {
@@ -60,25 +76,34 @@ function clampQuantity(value: number, max: number, category: TransactionCategory
 
 export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpen, onVoiceOpenChange }: TransactionWorkflowProps) {
   const navigate = useNavigate()
-  const { products, activeStore, processTransaction, addProduct: createInventoryProduct } = useInventory()
+  const { products, activeStore, processTransaction, addProduct: createInventoryProduct, refresh } = useInventory()
   const { showToast } = useToast()
   const [cartOpen, setCartOpen] = useState(false)
   const [resultOpen, setResultOpen] = useState(false)
+  const [paymentChoiceOpen, setPaymentChoiceOpen] = useState(false)
+  const [qrisOpen, setQrisOpen] = useState(false)
+  const [qrisCreating, setQrisCreating] = useState(false)
+  const [qrisPayment, setQrisPayment] = useState<QrisPaymentDisplay | null>(null)
+  const [qrisPaymentStatus, setQrisPaymentStatus] = useState<QrisPaymentStatus>('creating')
+  const [qrisFailure, setQrisFailure] = useState('')
+  const [qrisImage, setQrisImage] = useState<{ paymentId: string; dataUrl: string } | null>(null)
+  const [qrisTime, setQrisTime] = useState(0)
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [category, setCategory] = useState<TransactionCategory>('keluar')
   const [items, setItems] = useState<CartItem[]>([])
   const [lastItems, setLastItems] = useState<CartItem[]>([])
   const [lastCategory, setLastCategory] = useState<TransactionCategory>('keluar')
-  const [createdHistory, setCreatedHistory] = useState<HistoryItem[]>([])
+  const [qrisItems, setQrisItems] = useState<CartItem[]>([])
   const [processing, setProcessing] = useState(false)
   const submitLock = useRef(false)
+  const completedPayment = useRef('')
 
 	  const commitTransaction = async (cart: CartItem[], kind: TransactionCategory) => {
 	    if (submitLock.current) throw new Error('Transaksi sedang diproses')
 	    submitLock.current = true
 	    try {
-	      const created = await processTransaction({ category: kind, items: cart, operator: 'Kasir' })
-	      setCreatedHistory(created); setLastItems(cart); setLastCategory(kind)
+	      await processTransaction({ category: kind, items: cart, operator: 'Kasir' })
+	      setLastItems(cart); setLastCategory(kind)
 	    } finally { submitLock.current = false }
 	  }
 
@@ -129,7 +154,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
     setItems((current) => current.filter((item) => item.product.id !== productId))
   }
 
-  const handleProcess = async () => {
+  const finishCashTransaction = async () => {
     if (submitLock.current) return
     if (!items.length) {
       showToast('Keranjang masih kosong', 'error')
@@ -141,8 +166,9 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       await commitTransaction(items, category)
       setItems([])
       setCartOpen(false)
+      setPaymentChoiceOpen(false)
       setResultOpen(true)
-      showToast('Transaksi berhasil diproses', 'success')
+      showToast(category === 'keluar' ? 'Pembayaran tunai dan transaksi berhasil diproses.' : 'Transaksi barang masuk berhasil diproses.', 'success')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transaksi gagal diproses'
       showToast(message, 'error')
@@ -150,6 +176,138 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       setProcessing(false)
     }
   }
+
+  const handleProcess = async () => {
+    if (submitLock.current || processing || qrisCreating) return
+    if (!items.length) {
+      showToast('Keranjang masih kosong', 'error')
+      return
+    }
+    if (qrisPayment && (qrisPaymentStatus === 'pending' || qrisPaymentStatus === 'creating')) {
+      setQrisOpen(true)
+      showToast('Selesaikan atau tunggu QRIS aktif sebelum membuat pembayaran baru.', 'info')
+      return
+    }
+    if (category === 'masuk') {
+      await finishCashTransaction()
+      return
+    }
+    setPaymentChoiceOpen(true)
+  }
+
+  const handleCreateQrisPayment = async () => {
+    if (qrisCreating || !items.length) return
+    const client = supabase
+    if (!client || demoEnabled || !activeStore?.id) {
+      showToast('QRIS dinamis memerlukan koneksi Supabase dan akun Midtrans merchant aktif.', 'error')
+      return
+    }
+    setQrisCreating(true)
+    setProcessing(true)
+    setQrisFailure('')
+    setPaymentChoiceOpen(false)
+    try {
+      if (Capacitor.isNativePlatform()) {
+        await prepareInventoryNotification(true).catch(error => {
+          showToast(error instanceof Error ? error.message : 'Izin notifikasi pembayaran belum aktif.', 'info')
+        })
+      }
+      const clientRequestId = crypto.randomUUID()
+      const { data, error } = await client.functions.invoke('create-qris-payment', {
+        body: {
+          storeId: activeStore.id,
+          clientRequestId,
+          expectedAmount: total,
+          items: items.map(item => ({ productId: item.product.id, quantity: item.quantity })),
+        },
+      })
+      if (error) throw new Error(error.message || 'QRIS gagal dibuat. Periksa koneksi dan konfigurasi pembayaran.')
+      if (!data || typeof data.qrString !== 'string' || typeof data.id !== 'string' || Number(data.amount) !== total) {
+        throw new Error('QRIS dari server tidak sesuai dengan total keranjang. Transaksi belum dibuat.')
+      }
+      setQrisItems(items.map(item => ({ ...item })))
+      setQrisPayment({ id: data.id, orderId: data.orderId, amount: Number(data.amount), qrString: data.qrString, expiresAt: data.expiresAt })
+      setQrisPaymentStatus('pending')
+      setQrisOpen(true)
+      setCartOpen(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'QRIS gagal dibuat.'
+      setQrisFailure(message)
+      showToast(message, 'error')
+    } finally {
+      setQrisCreating(false)
+      setProcessing(false)
+    }
+  }
+
+  const completeQrisPayment = useCallback(async (paymentId: string) => {
+    if (completedPayment.current === paymentId || !activeStore) return
+    completedPayment.current = paymentId
+    setQrisPaymentStatus('paid')
+    setLastItems(qrisItems)
+    setLastCategory('keluar')
+    setItems([])
+    setCartOpen(false)
+    setPaymentChoiceOpen(false)
+    setQrisOpen(false)
+    await refresh().catch(error => showToast(error instanceof Error ? error.message : 'Stok berhasil disimpan; tampilan perlu dimuat ulang.', 'info'))
+    setResultOpen(true)
+    showToast(`Pembayaran QRIS ${formatCurrency(qrisPayment?.amount ?? total)} berhasil diterima.`, 'success')
+    if (Capacitor.isNativePlatform()) {
+      void showQrisPaymentNotification(activeStore.name, formatCurrency(qrisPayment?.amount ?? total))
+        .catch(() => showToast('Pembayaran tercatat. Izin notifikasi perangkat perlu diperiksa.', 'info'))
+    }
+  }, [activeStore, qrisItems, qrisPayment?.amount, refresh, showToast, total])
+
+  useEffect(() => {
+    if (!qrisOpen || !qrisPayment) return
+    let alive = true
+    void import('qrcode').then(({ default: QRCode }) => QRCode.toDataURL(qrisPayment.qrString, {
+      errorCorrectionLevel: 'M', margin: 2, width: 360,
+      color: { dark: '#000000', light: '#ffffff' },
+    })).then(dataUrl => { if (alive) setQrisImage({ paymentId: qrisPayment.id, dataUrl }) }).catch(() => {
+      if (alive) setQrisFailure('Gambar QRIS gagal dibuat di perangkat ini.')
+    })
+    void maximizeQrBrightness().catch(() => showToast('Kecerahan otomatis tidak tersedia di perangkat ini.', 'info'))
+    const timer = window.setInterval(() => setQrisTime(Date.now()), 1000)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+      void restoreQrBrightness()
+    }
+  }, [qrisOpen, qrisPayment, showToast])
+
+  useEffect(() => {
+    const client = supabase
+    if (!qrisOpen || !qrisPayment || !client || qrisPaymentStatus !== 'pending') return
+    let alive = true
+    const checkStatus = async () => {
+      const { data, error } = await client.from('qris_payments')
+        .select('status, failure_reason')
+        .eq('id', qrisPayment.id)
+        .maybeSingle()
+      if (!alive || error || !data) return
+      const status = data.status as QrisPaymentStatus
+      setQrisPaymentStatus(status)
+      setQrisFailure(data.failure_reason ?? '')
+      if (status === 'paid') await completeQrisPayment(qrisPayment.id)
+      if (status === 'inventory_error') {
+        showToast('GoPay mengonfirmasi dana masuk, tetapi stok perlu ditinjau admin.', 'error')
+      }
+    }
+    const channel = client.channel(`qris-payment-${qrisPayment.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'qris_payments', filter: `id=eq.${qrisPayment.id}`,
+      }, () => { void checkStatus() })
+      .subscribe()
+    void checkStatus()
+    const poll = window.setInterval(() => { void checkStatus() }, 4000)
+    return () => {
+      alive = false
+      window.clearInterval(poll)
+      void client.removeChannel(channel)
+    }
+  }, [qrisOpen, qrisPayment, qrisPaymentStatus, completeQrisPayment, showToast])
 
   const handleMissingBarcode = (barcode: string) => {
     sessionStorage.setItem('pendingBarcode', barcode)
@@ -182,7 +340,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
         onMissingBarcode={handleMissingBarcode}
       />
 
-      <Dialog open={cartOpen} onOpenChange={open => { if (!submitLock.current) setCartOpen(open) }}>
+      <Dialog open={cartOpen} onOpenChange={open => { if (!submitLock.current && !qrisCreating) setCartOpen(open) }}>
         <DialogContent className="max-h-[92vh] overflow-hidden border-white/12 bg-[#121827]/96 p-0 text-white shadow-2xl sm:max-w-3xl max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl">
           <DialogHeader className="px-5 pt-5">
             <DialogTitle className="flex items-center gap-2 text-xl text-white">
@@ -302,6 +460,62 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
         </DialogContent>
       </Dialog>
 
+      <Dialog open={paymentChoiceOpen} onOpenChange={open => { if (!processing) setPaymentChoiceOpen(open) }}>
+        <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-lg">
+          <DialogHeader>
+            <div className="mb-2 flex size-12 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><CreditCard className="size-6" /></div>
+            <DialogTitle className="text-white">Pilih pembayaran</DialogTitle>
+            <DialogDescription className="text-white/62">Total penjualan {formatCurrency(total)}. Pilih cara pembayaran pelanggan.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Button type="button" variant="outline" className="h-16 justify-start border-white/12 bg-white/[0.06] text-white" disabled={processing} onClick={() => void finishCashTransaction()}>
+              <Banknote className="size-5 text-emerald-200" /><span className="text-left"><strong className="block">Tunai</strong><small className="text-white/55">Konfirmasi uang diterima</small></span>
+            </Button>
+            <Button type="button" className="h-16 justify-start bg-cyan-300 text-slate-950 hover:bg-cyan-200" disabled={processing || qrisCreating} onClick={() => void handleCreateQrisPayment()}>
+              <QrCode className="size-5" /><span className="text-left"><strong className="block">QRIS GoPay</strong><small className="text-slate-800/70">QR dinamis sesuai total</small></span>
+            </Button>
+          </div>
+          <p className="text-xs leading-relaxed text-white/48">Stok baru berubah setelah Midtrans mengirim konfirmasi settlement yang valid.</p>
+          <DialogFooter><Button type="button" variant="outline" onClick={() => setPaymentChoiceOpen(false)}>Kembali ke keranjang</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={qrisOpen} onOpenChange={open => {
+        if (!open && qrisPaymentStatus !== 'pending' && qrisPaymentStatus !== 'creating') {
+          setQrisOpen(false)
+          setQrisPayment(null)
+          setQrisPaymentStatus('creating')
+        }
+      }}>
+        <DialogContent className="max-h-[94dvh] overflow-y-auto border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-1 flex size-12 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><QrCode className="size-6" /></div>
+            <DialogTitle className="text-white">Scan QRIS GoPay</DialogTitle>
+            <DialogDescription className="text-white/62">Tunjukkan QR ini kepada pelanggan. Sistem menunggu status resmi dari Midtrans.</DialogDescription>
+          </DialogHeader>
+          {qrisPayment ? <div className="grid justify-items-center gap-3">
+            <p className="font-mono text-2xl font-bold text-emerald-100">{formatCurrency(qrisPayment.amount)}</p>
+            <div className="flex min-h-64 w-full max-w-72 items-center justify-center rounded-2xl bg-white p-3">
+              {qrisImage?.paymentId === qrisPayment.id ? <img src={qrisImage.dataUrl} alt={`QRIS dinamis ${formatCurrency(qrisPayment.amount)}`} className="aspect-square w-full" /> : <span role="status" className="text-sm text-slate-700">Menyiapkan QRIS…</span>}
+            </div>
+            <p className="text-center text-xs text-white/52">Order {qrisPayment.orderId} · berlaku sampai {dateTimeLabel(new Date(qrisPayment.expiresAt))}</p>
+            {qrisPaymentStatus === 'pending' ? <p role="status" className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-sm text-amber-100">Menunggu pembayaran terkonfirmasi…</p> : null}
+            {qrisPaymentStatus === 'paid' ? <p role="status" className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-sm text-emerald-100">Pembayaran terkonfirmasi.</p> : null}
+            {qrisPaymentStatus === 'expired' ? <p role="status" className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">QRIS kedaluwarsa. Buat permintaan QRIS baru untuk pelanggan.</p> : null}
+            {qrisPaymentStatus === 'failed' ? <p role="alert" className="rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">Pembayaran QRIS gagal atau dibatalkan. {qrisFailure}</p> : null}
+            {qrisPaymentStatus === 'inventory_error' ? <p role="alert" className="rounded-xl border border-orange-300/20 bg-orange-300/10 p-3 text-sm text-orange-100">GoPay mengonfirmasi dana masuk, tetapi stok belum tersimpan otomatis. Hubungi admin untuk meninjau transaksi. {qrisFailure}</p> : null}
+            {qrisFailure && qrisPaymentStatus === 'pending' ? <p role="alert" className="text-xs text-rose-100">{qrisFailure}</p> : null}
+            {qrisPaymentStatus === 'pending' && qrisTime >= new Date(qrisPayment.expiresAt).getTime() ? <p className="text-xs text-amber-100/75">Waktu QR terlewati. Menunggu konfirmasi kedaluwarsa dari Midtrans.</p> : null}
+            {!Capacitor.isNativePlatform() ? <p className="text-center text-xs text-white/45">Kecerahan otomatis hanya tersedia di APK Android.</p> : null}
+          </div> : null}
+          <DialogFooter>
+            {qrisPaymentStatus !== 'pending' && qrisPaymentStatus !== 'creating'
+              ? <Button type="button" variant="outline" onClick={() => { setQrisOpen(false); setQrisPayment(null); setQrisPaymentStatus('creating') }}>Tutup</Button>
+              : <span className="w-full text-center text-xs text-white/45">Jangan tutup aplikasi sampai pembayaran terkonfirmasi.</span>}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={resultOpen} onOpenChange={setResultOpen}>
         <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-md">
           <DialogHeader>
@@ -310,7 +524,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
             </div>
             <DialogTitle className="text-white">Transaksi selesai</DialogTitle>
             <DialogDescription className="text-white/58">
-              {createdHistory.length} item tersimpan ke history dan stok sudah diperbarui.
+              {lastItems.length} item tersimpan ke history dan stok sudah diperbarui.
             </DialogDescription>
           </DialogHeader>
 	          <DialogFooter>

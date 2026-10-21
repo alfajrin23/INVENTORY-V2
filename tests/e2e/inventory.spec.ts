@@ -3,7 +3,7 @@ import { parseVoiceCommand, parseVoiceDraftEdit, matchVoiceProducts } from '../.
 import { lookupScannedProduct } from '../../src/lib/barcode-product-reference'
 import { getDailyRevenueSeries } from '../../src/lib/analytics'
 
-const routes = ['/', '/databarang.html', '/history.html', '/laporan.html', '/laporanbarangmasuk.html', '/laporanbarangkeluar.html', '/laporanstokbarang.html', '/laporanpendapatan.html', '/pendapatanharian.html', '/pendapatanmingguan.html', '/pendapatanbulanan.html', '/pengaturan.html', '/logsinput.html', '/profilsetting.html']
+const routes = ['/', '/databarang.html', '/history.html', '/qris.html', '/laporan.html', '/laporanbarangmasuk.html', '/laporanbarangkeluar.html', '/laporanstokbarang.html', '/laporanpendapatan.html', '/pendapatanharian.html', '/pendapatanmingguan.html', '/pendapatanbulanan.html', '/pengaturan.html', '/logsinput.html', '/profilsetting.html']
 async function data(page: Page) { return page.evaluate(() => JSON.parse(localStorage.getItem('ab-elektronik-v2-data')!)) }
 async function mockSpeech(page: Page, text = '', error = '') {
   await page.addInitScript(({ text, error }) => {
@@ -33,6 +33,9 @@ async function processVoiceCart(page: Page) {
   await page.getByRole('button', { name: 'Konfirmasi', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Keranjang Transaksi' })).toBeVisible()
   await page.getByRole('button', { name: 'Proses', exact: true }).click()
+  if (await page.getByRole('heading', { name: 'Pilih pembayaran' }).count()) {
+    await page.getByRole('button', { name: /Tunai/ }).click()
+  }
   await expect(page.getByRole('heading', { name: 'Transaksi selesai' })).toBeVisible()
 }
 
@@ -357,6 +360,29 @@ for (const category of ['masuk','keluar']) {
   })
 }
 
+test('QRIS checkout stays pending without a live backend and QR history is reachable from settings', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Scan', exact: true }).click()
+  await page.getByLabel('Input barcode manual').fill('8991001000011')
+  await page.getByRole('button', { name: 'Cari barcode' }).click()
+  const before = await data(page)
+
+  await page.getByRole('button', { name: 'Proses', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Pilih pembayaran' })).toBeVisible()
+  await page.getByRole('button', { name: /QRIS GoPay/ }).click()
+  await expect(page.getByText(/memerlukan koneksi Supabase dan akun Midtrans merchant aktif/)).toBeVisible()
+  expect((await data(page)).products[0].stok).toBe(before.products[0].stok)
+  expect((await data(page)).history).toHaveLength(before.history.length)
+
+  await page.getByRole('button', { name: 'Kembali ke keranjang' }).click()
+  await page.goto('/pengaturan.html')
+  await expect(page.getByRole('heading', { name: 'Pengaturan QRIS' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ganti gambar QRIS' })).toBeDisabled()
+  await page.getByRole('link', { name: 'Riwayat QRIS' }).click()
+  await expect(page.getByRole('heading', { name: 'Riwayat Transaksi QRIS' })).toBeVisible()
+})
+
 for (const [command,delta] of [['transaksi charger Anker dua',-2],['jual charger Anker tiga',-3],['barang masuk charger Anker 10',10],['restok charger Anker lima',5]] as const) {
   test(`voice confirmation: ${command}`,async ({page})=>{
     await page.setViewportSize({width:390,height:844}); await voice(page,command)
@@ -367,6 +393,7 @@ for (const [command,delta] of [['transaksi charger Anker dua',-2],['jual charger
     await expect(page.getByRole('heading',{name:'Keranjang Transaksi'})).toBeVisible()
     expect((await data(page)).products[0].stok).toBe(before.products[0].stok)
     await page.getByRole('button',{name:'Proses',exact:true}).click()
+    if (delta < 0) await page.getByRole('button', { name: /Tunai/ }).click()
     await expect(page.getByRole('heading',{name:'Transaksi selesai'})).toBeVisible()
     const after=await data(page)
     expect(after.products[0].stok).toBe(before.products[0].stok+delta)
@@ -522,6 +549,7 @@ test('scanner fallback, missing barcode, cart, receipt PDF and print',async ({pa
   await page.getByRole('button',{name:'Cari barcode'}).click()
   await expect(page.getByRole('heading',{name:'Keranjang Transaksi'})).toBeVisible()
   await page.getByRole('button',{name:'Proses',exact:true}).click()
+  await page.getByRole('button', { name: /Tunai/ }).click()
   await expect(page.getByRole('heading',{name:'Transaksi selesai'})).toBeVisible()
   await page.getByRole('button',{name:'Lihat Resi'}).click()
   const download=page.waitForEvent('download');await page.getByRole('button',{name:'Save PDF',exact:true}).click();expect((await download).suggestedFilename()).toContain('resi')
@@ -643,6 +671,7 @@ test('scanner repeat manual detection does not duplicate cart selection',async (
   await page.getByRole('button',{name:'Cari barcode'}).evaluate((button:HTMLButtonElement)=>{button.click();button.click()})
   await expect(page.getByRole('heading',{name:'Keranjang Transaksi'})).toBeVisible()
   await page.getByRole('button',{name:'Proses',exact:true}).click()
+  await page.getByRole('button', { name: /Tunai/ }).click()
   await expect(page.getByRole('heading',{name:'Transaksi selesai'})).toBeVisible()
   expect((await data(page)).products[0].stok).toBe(41)
   expect(errors).toEqual([])
