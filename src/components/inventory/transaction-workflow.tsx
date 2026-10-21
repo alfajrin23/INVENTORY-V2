@@ -41,6 +41,7 @@ import { demoEnabled, supabase } from '@/lib/supabase'
 import { maximizeQrBrightness, restoreQrBrightness } from '@/lib/screen-brightness'
 import { routes } from '@/lib/navigation'
 import { downloadReceiptPdf, printReceiptWindow } from '@/lib/pdf'
+import { MAX_QRIS_AMOUNT } from '@/lib/qris-payload'
 import type { CartItem, Product, ProductInput, TransactionCategory } from '@/lib/types'
 
 const VoiceDialog = lazy(() => import('./voice-dialog').then(m => ({ default: m.VoiceDialog })))
@@ -85,6 +86,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
   const [qrisCreating, setQrisCreating] = useState(false)
   const [qrisPayment, setQrisPayment] = useState<QrisPaymentDisplay | null>(null)
   const [qrisPaymentStatus, setQrisPaymentStatus] = useState<QrisPaymentStatus>('creating')
+  const [qrisConfirming, setQrisConfirming] = useState(false)
   const [qrisFailure, setQrisFailure] = useState('')
   const [qrisImage, setQrisImage] = useState<{ paymentId: string; dataUrl: string } | null>(null)
   const [qrisTime, setQrisTime] = useState(0)
@@ -97,6 +99,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
   const [processing, setProcessing] = useState(false)
   const submitLock = useRef(false)
   const completedPayment = useRef('')
+  const notifiedPayment = useRef('')
 
 	  const commitTransaction = async (cart: CartItem[], kind: TransactionCategory) => {
 	    if (submitLock.current) throw new Error('Transaksi sedang diproses')
@@ -197,9 +200,13 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
 
   const handleCreateQrisPayment = async () => {
     if (qrisCreating || !items.length) return
+    if (total > MAX_QRIS_AMOUNT) {
+      showToast('QRIS lokal mendukung transaksi sampai Rp10.000.000.', 'error')
+      return
+    }
     const client = supabase
     if (!client || demoEnabled || !activeStore?.id) {
-      showToast('QRIS dinamis memerlukan koneksi Supabase dan akun Midtrans merchant aktif.', 'error')
+      showToast('QRIS dinamis memerlukan koneksi Supabase dan QRIS merchant di menu Pengaturan.', 'error')
       return
     }
     setQrisCreating(true)
@@ -253,11 +260,41 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
     await refresh().catch(error => showToast(error instanceof Error ? error.message : 'Stok berhasil disimpan; tampilan perlu dimuat ulang.', 'info'))
     setResultOpen(true)
     showToast(`Pembayaran QRIS ${formatCurrency(qrisPayment?.amount ?? total)} berhasil diterima.`, 'success')
-    if (Capacitor.isNativePlatform()) {
+    if (notifiedPayment.current !== paymentId && Capacitor.isNativePlatform()) {
+      notifiedPayment.current = paymentId
       void showQrisPaymentNotification(activeStore.name, formatCurrency(qrisPayment?.amount ?? total))
         .catch(() => showToast('Pembayaran tercatat. Izin notifikasi perangkat perlu diperiksa.', 'info'))
     }
   }, [activeStore, qrisItems, qrisPayment?.amount, refresh, showToast, total])
+
+  const handleConfirmQrisPayment = async () => {
+    const client = supabase
+    if (!client || !qrisPayment || qrisConfirming) return
+    setQrisConfirming(true)
+    try {
+      const { data, error } = await client.rpc('confirm_qris_payment', { p_payment_id: qrisPayment.id })
+      if (error) throw error
+      const result = data as { status?: QrisPaymentStatus; message?: string } | null
+      if (result?.status === 'paid') {
+        setQrisPaymentStatus('paid')
+        await completeQrisPayment(qrisPayment.id)
+      } else if (result?.status === 'inventory_error') {
+        setQrisPaymentStatus('inventory_error')
+        setQrisFailure(result.message ?? 'Dana diterima, tetapi stok perlu ditinjau admin.')
+        showToast('Dana dikonfirmasi, tetapi stok perlu ditinjau admin.', 'error')
+        if (notifiedPayment.current !== qrisPayment.id && activeStore && Capacitor.isNativePlatform()) {
+          notifiedPayment.current = qrisPayment.id
+          void showQrisPaymentNotification(activeStore.name, formatCurrency(qrisPayment.amount)).catch(() => {})
+        }
+      } else {
+        throw new Error('Status konfirmasi QRIS tidak dikenali. Periksa Riwayat QRIS.')
+      }
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Konfirmasi pembayaran QRIS gagal.', 'error')
+    } finally {
+      setQrisConfirming(false)
+    }
+  }
 
   useEffect(() => {
     if (!qrisOpen || !qrisPayment) return
@@ -292,7 +329,11 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       setQrisFailure(data.failure_reason ?? '')
       if (status === 'paid') await completeQrisPayment(qrisPayment.id)
       if (status === 'inventory_error') {
-        showToast('GoPay mengonfirmasi dana masuk, tetapi stok perlu ditinjau admin.', 'error')
+        showToast('Dana QRIS dikonfirmasi, tetapi stok perlu ditinjau admin.', 'error')
+        if (notifiedPayment.current !== qrisPayment.id && activeStore && Capacitor.isNativePlatform()) {
+          notifiedPayment.current = qrisPayment.id
+          void showQrisPaymentNotification(activeStore.name, formatCurrency(qrisPayment.amount)).catch(() => {})
+        }
       }
     }
     const channel = client.channel(`qris-payment-${qrisPayment.id}`)
@@ -307,7 +348,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       window.clearInterval(poll)
       void client.removeChannel(channel)
     }
-  }, [qrisOpen, qrisPayment, qrisPaymentStatus, completeQrisPayment, showToast])
+  }, [qrisOpen, qrisPayment, qrisPaymentStatus, completeQrisPayment, showToast, activeStore])
 
   const handleMissingBarcode = (barcode: string) => {
     sessionStorage.setItem('pendingBarcode', barcode)
@@ -471,17 +512,21 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
             <Button type="button" variant="outline" className="h-16 justify-start border-white/12 bg-white/[0.06] text-white" disabled={processing} onClick={() => void finishCashTransaction()}>
               <Banknote className="size-5 text-emerald-200" /><span className="text-left"><strong className="block">Tunai</strong><small className="text-white/55">Konfirmasi uang diterima</small></span>
             </Button>
-            <Button type="button" className="h-16 justify-start bg-cyan-300 text-slate-950 hover:bg-cyan-200" disabled={processing || qrisCreating} onClick={() => void handleCreateQrisPayment()}>
-              <QrCode className="size-5" /><span className="text-left"><strong className="block">QRIS GoPay</strong><small className="text-slate-800/70">QR dinamis sesuai total</small></span>
+            <Button type="button" className="h-16 justify-start bg-cyan-300 text-slate-950 hover:bg-cyan-200" disabled={processing || qrisCreating || total > MAX_QRIS_AMOUNT} onClick={() => void handleCreateQrisPayment()}>
+              <QrCode className="size-5" /><span className="text-left"><strong className="block">QRIS</strong><small className="text-slate-800/70">Nominal sesuai total · maks. Rp10 juta</small></span>
             </Button>
           </div>
-          <p className="text-xs leading-relaxed text-white/48">Stok baru berubah setelah Midtrans mengirim konfirmasi settlement yang valid.</p>
+          <p className="text-xs leading-relaxed text-white/48">Setelah pelanggan membayar, kasir wajib cek dana masuk di GoBiz lalu tekan Konfirmasi dibayar. QR lokal tidak menerima status pembayaran otomatis.</p>
           <DialogFooter><Button type="button" variant="outline" onClick={() => setPaymentChoiceOpen(false)}>Kembali ke keranjang</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={qrisOpen} onOpenChange={open => {
-        if (!open && qrisPaymentStatus !== 'pending' && qrisPaymentStatus !== 'creating') {
+        if (open) setQrisOpen(true)
+        else if (qrisPaymentStatus === 'pending' && qrisPayment && qrisTime >= new Date(qrisPayment.expiresAt).getTime()) {
+          setQrisPaymentStatus('expired')
+          setQrisOpen(false)
+        } else if (qrisPaymentStatus !== 'pending' && qrisPaymentStatus !== 'creating') {
           setQrisOpen(false)
           setQrisPayment(null)
           setQrisPaymentStatus('creating')
@@ -490,8 +535,8 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
         <DialogContent className="max-h-[94dvh] overflow-y-auto border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-md">
           <DialogHeader>
             <div className="mb-1 flex size-12 items-center justify-center rounded-2xl bg-cyan-300/12 text-cyan-100"><QrCode className="size-6" /></div>
-            <DialogTitle className="text-white">Scan QRIS GoPay</DialogTitle>
-            <DialogDescription className="text-white/62">Tunjukkan QR ini kepada pelanggan. Sistem menunggu status resmi dari Midtrans.</DialogDescription>
+            <DialogTitle className="text-white">QRIS pembayaran</DialogTitle>
+            <DialogDescription className="text-white/62">Tunjukkan QR ini kepada pelanggan. Cek dana masuk di GoBiz sebelum menandai transaksi lunas.</DialogDescription>
           </DialogHeader>
           {qrisPayment ? <div className="grid justify-items-center gap-3">
             <p className="font-mono text-2xl font-bold text-emerald-100">{formatCurrency(qrisPayment.amount)}</p>
@@ -501,17 +546,26 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
             <p className="text-center text-xs text-white/52">Order {qrisPayment.orderId} · berlaku sampai {dateTimeLabel(new Date(qrisPayment.expiresAt))}</p>
             {qrisPaymentStatus === 'pending' ? <p role="status" className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-sm text-amber-100">Menunggu pembayaran terkonfirmasi…</p> : null}
             {qrisPaymentStatus === 'paid' ? <p role="status" className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1.5 text-sm text-emerald-100">Pembayaran terkonfirmasi.</p> : null}
-            {qrisPaymentStatus === 'expired' ? <p role="status" className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">QRIS kedaluwarsa. Buat permintaan QRIS baru untuk pelanggan.</p> : null}
+            {qrisPaymentStatus === 'expired' ? <p role="status" className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100">Masa reservasi stok aplikasi sudah lewat. QR mungkin masih bisa dibayar karena aplikasi tidak dapat membatalkan QRIS dari bank. Cek GoBiz sebelum membuat pembayaran pengganti.</p> : null}
             {qrisPaymentStatus === 'failed' ? <p role="alert" className="rounded-xl border border-rose-300/20 bg-rose-300/10 p-3 text-sm text-rose-100">Pembayaran QRIS gagal atau dibatalkan. {qrisFailure}</p> : null}
-            {qrisPaymentStatus === 'inventory_error' ? <p role="alert" className="rounded-xl border border-orange-300/20 bg-orange-300/10 p-3 text-sm text-orange-100">GoPay mengonfirmasi dana masuk, tetapi stok belum tersimpan otomatis. Hubungi admin untuk meninjau transaksi. {qrisFailure}</p> : null}
+            {qrisPaymentStatus === 'inventory_error' ? <p role="alert" className="rounded-xl border border-orange-300/20 bg-orange-300/10 p-3 text-sm text-orange-100">Dana sudah dikonfirmasi di GoBiz, tetapi stok belum tersimpan. Hubungi admin untuk meninjau transaksi. {qrisFailure}</p> : null}
             {qrisFailure && qrisPaymentStatus === 'pending' ? <p role="alert" className="text-xs text-rose-100">{qrisFailure}</p> : null}
-            {qrisPaymentStatus === 'pending' && qrisTime >= new Date(qrisPayment.expiresAt).getTime() ? <p className="text-xs text-amber-100/75">Waktu QR terlewati. Menunggu konfirmasi kedaluwarsa dari Midtrans.</p> : null}
+            {qrisPaymentStatus === 'pending' && qrisTime >= new Date(qrisPayment.expiresAt).getTime() ? <p className="text-xs text-amber-100/75">Batas reservasi stok aplikasi terlewati. QR ini mungkin masih bisa dibayar; pastikan GoBiz sebelum transaksi pengganti.</p> : null}
             {!Capacitor.isNativePlatform() ? <p className="text-center text-xs text-white/45">Kecerahan otomatis hanya tersedia di APK Android.</p> : null}
           </div> : null}
           <DialogFooter>
-            {qrisPaymentStatus !== 'pending' && qrisPaymentStatus !== 'creating'
-              ? <Button type="button" variant="outline" onClick={() => { setQrisOpen(false); setQrisPayment(null); setQrisPaymentStatus('creating') }}>Tutup</Button>
-              : <span className="w-full text-center text-xs text-white/45">Jangan tutup aplikasi sampai pembayaran terkonfirmasi.</span>}
+            {qrisPaymentStatus === 'pending' || qrisPaymentStatus === 'expired'
+              ? <Button type="button" disabled={qrisConfirming} onClick={() => void handleConfirmQrisPayment()}>
+                <CheckCircle2 className="size-4" />{qrisConfirming ? 'Menyimpan konfirmasi…' : 'Konfirmasi dibayar'}
+              </Button>
+              : null}
+            {qrisPaymentStatus === 'pending' && qrisTime < (qrisPayment ? new Date(qrisPayment.expiresAt).getTime() : 0)
+              ? <span className="w-full text-center text-xs text-white/45">Cek dana di GoBiz, lalu konfirmasi pembayaran di sini.</span>
+              : qrisPaymentStatus === 'pending'
+                ? <Button type="button" variant="outline" onClick={() => { setQrisPaymentStatus('expired'); setQrisOpen(false) }}>Kembali ke kasir</Button>
+                : qrisPaymentStatus !== 'creating'
+                  ? <Button type="button" variant="outline" onClick={() => { setQrisOpen(false); setQrisPayment(null); setQrisPaymentStatus('creating') }}>Tutup</Button>
+                  : null}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -67,12 +67,13 @@ export async function fetchQrisImage() {
   return typeof data.qris_image_url === 'string' ? data.qris_image_url : ''
 }
 
-export async function uploadQrisImage(file: File) {
+export async function uploadQrisImage(file: File, qrisPayload: string) {
   const client = requireSupabase()
+  if (!qrisPayload.trim()) throw new Error('QRIS belum terbaca dari gambar.')
   const publicUrl = await uploadPublicImage('branding/qris-base', file)
   const { error } = await client
     .from('app_branding')
-    .update({ qris_image_url: publicUrl })
+    .update({ qris_image_url: publicUrl, qris_payload: qrisPayload })
     .eq('id', 'default')
     .select('id')
     .single()

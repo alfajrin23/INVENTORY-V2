@@ -138,7 +138,7 @@ export async function showQrisPaymentNotification(storeName: string, amount: str
   await LocalNotifications.schedule({ notifications: [{
     id: 2300 + Math.floor(Math.random() * 100000),
     title: `${storeName} - Pembayaran QRIS berhasil`,
-    body: `Dana ${amount} telah terkonfirmasi masuk melalui GoPay/QRIS.`,
+    body: `Dana ${amount} telah dikonfirmasi masuk melalui QRIS.`,
     channelId: INVENTORY_NOTIFICATION_CHANNEL,
     smallIcon: 'ic_stat_inventory',
     largeIcon: 'ic_inventory_gradient',

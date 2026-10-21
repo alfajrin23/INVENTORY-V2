@@ -1,5 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { buildDynamicQris, MAX_QRIS_AMOUNT } from '../_shared/qris-payload.mjs'
 import { supabasePublicKey, supabaseServiceKey } from '../_shared/supabase-keys.mjs'
 
 const corsHeaders = {
@@ -28,20 +29,11 @@ Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (request.method !== 'POST') return serverError('Gunakan metode POST.', 405)
 
-  const serverKey = Deno.env.get('MIDTRANS_SERVER_KEY')
-  const merchantId = Deno.env.get('MIDTRANS_EXPECTED_MERCHANT_ID')
-  const isProduction = Deno.env.get('MIDTRANS_IS_PRODUCTION') === 'true'
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = supabaseServiceKey(Deno.env)
   const publicKey = supabasePublicKey(Deno.env, request.headers.get('apikey'))
-  if (!serverKey || !merchantId || !supabaseUrl || !serviceRoleKey || !publicKey) {
-    return serverError('Pembayaran QRIS belum dikonfigurasi oleh admin.', 503)
-  }
-  if (isProduction && serverKey.startsWith('SB-')) {
-    return serverError('Konfigurasi Midtrans live tidak sesuai.', 503)
-  }
-  if (!isProduction && serverKey.startsWith('Mid-server-')) {
-    return serverError('Konfigurasi Midtrans Sandbox tidak sesuai.', 503)
+  if (!supabaseUrl || !serviceRoleKey || !publicKey) {
+    return serverError('Koneksi pembayaran QRIS belum dikonfigurasi oleh admin.', 503)
   }
 
   const authorization = request.headers.get('Authorization')
@@ -62,8 +54,9 @@ Deno.serve(async request => {
   }
   if (!validUuid(body.storeId) || !validUuid(body.clientRequestId)
       || !Number.isSafeInteger(body.expectedAmount) || Number(body.expectedAmount) < 1
+      || Number(body.expectedAmount) > MAX_QRIS_AMOUNT
       || !Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100) {
-    return serverError('Toko, total, atau isi keranjang tidak valid.')
+    return serverError('Toko, total, atau isi keranjang tidak valid. QRIS mendukung nominal sampai Rp10.000.000.')
   }
 
   const requestedItems: Array<{ productId: string; quantity: number }> = []
@@ -86,7 +79,7 @@ Deno.serve(async request => {
 
   const { data: previous, error: previousError } = await admin
     .from('qris_payments')
-    .select('id, store_id, created_by, order_id, gross_amount, status, qris_string, expires_at')
+    .select('id, store_id, created_by, order_id, gross_amount, status, qris_string, provider_status, expires_at')
     .eq('client_request_id', body.clientRequestId)
     .maybeSingle()
   if (previousError) return serverError('Riwayat permintaan QRIS gagal dibaca.', 500)
@@ -94,11 +87,20 @@ Deno.serve(async request => {
     if (previous.created_by !== userData.user.id || previous.store_id !== body.storeId) {
       return serverError('Permintaan pembayaran QRIS tidak dapat digunakan.', 409)
     }
-    if (previous.status === 'pending' && previous.qris_string) {
+    if (previous.status === 'pending' && previous.qris_string && previous.provider_status === 'manual_local') {
       return json({ id: previous.id, orderId: previous.order_id, amount: Number(previous.gross_amount),
         qrString: previous.qris_string, expiresAt: previous.expires_at })
     }
-    return serverError('Permintaan QRIS ini sudah pernah diproses. Buat permintaan baru.', 409)
+    return serverError('Permintaan QRIS ini sudah pernah diproses. Periksa Riwayat QRIS sebelum mencoba lagi.', 409)
+  }
+
+  const { data: branding, error: brandingError } = await admin
+    .from('app_branding')
+    .select('qris_payload')
+    .eq('id', 'default')
+    .single()
+  if (brandingError || typeof branding?.qris_payload !== 'string' || !branding.qris_payload) {
+    return serverError('Data QRIS statis belum tersedia. Atur gambar QRIS di menu Pengaturan.', 503)
   }
 
   const orderId = `ABE-${crypto.randomUUID().replaceAll('-', '').toUpperCase()}`
@@ -116,57 +118,26 @@ Deno.serve(async request => {
       ? reason : 'Keranjang tidak dapat diverifikasi. Muat ulang stok lalu coba lagi.', 409)
   }
 
-  const apiBase = isProduction ? 'https://api.midtrans.com' : 'https://api.sandbox.midtrans.com'
-  const notificationUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/midtrans-qris-notification`
-  let chargeResponse: Response
+  let qrString: string
   try {
-    chargeResponse = await fetch(`${apiBase}/v2/charge`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${btoa(`${serverKey}:`)}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'X-Override-Notification': notificationUrl,
-      },
-      body: JSON.stringify({
-        payment_type: 'qris',
-        transaction_details: { order_id: orderId, gross_amount: Number(createdData.gross_amount) },
-      }),
-    })
+    qrString = buildDynamicQris(branding.qris_payload, Number(createdData.gross_amount), orderId)
   } catch {
-    await admin.from('qris_payments').update({ status: 'failed', provider_status: 'unreachable',
-      failure_reason: 'Midtrans tidak dapat dihubungi. Buat QRIS baru setelah koneksi pulih.' }).eq('id', createdData.id)
-    return serverError('Midtrans tidak dapat dihubungi. Periksa koneksi lalu buat QRIS baru.', 502)
+    await admin.from('qris_payments').update({ status: 'failed', provider_status: 'invalid_base_qris',
+      failure_reason: 'QRIS statis di Pengaturan tidak valid. Unggah ulang QRIS merchant.' }).eq('id', createdData.id)
+    return serverError('QRIS statis di Pengaturan tidak valid. Unggah ulang gambar QRIS merchant.', 409)
   }
 
-  const charge = await chargeResponse.json().catch(() => null)
-  const validResponse = chargeResponse.ok
-    && charge?.payment_type === 'qris'
-    && String(charge?.acquirer ?? '').toLowerCase() === 'gopay'
-    && charge?.merchant_id === merchantId
-    && Number(charge?.gross_amount) === Number(createdData.gross_amount)
-    && typeof charge?.transaction_id === 'string'
-    && typeof charge?.qr_string === 'string'
-    && charge.qr_string.length > 20
-    && charge?.transaction_status === 'pending'
-  if (!validResponse) {
-    const safeReason = typeof charge?.status_message === 'string' ? charge.status_message.slice(0, 180) : 'Respons Midtrans tidak sesuai.'
-    await admin.from('qris_payments').update({ status: 'failed', provider_status: String(charge?.transaction_status ?? 'error'),
-      failure_reason: safeReason }).eq('id', createdData.id)
-    return serverError('Midtrans menolak pembuatan QRIS. Periksa aktivasi QRIS/GoPay dan kredensial merchant.', 502)
-  }
-
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
   const { data: saved, error: saveError } = await admin.from('qris_payments').update({
-    transaction_id: charge.transaction_id,
-    qris_string: charge.qr_string,
+    qris_string: qrString,
     status: 'pending',
-    provider_status: charge.transaction_status,
-    expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    provider_status: 'manual_local',
+    expires_at: expiresAt,
   }).eq('id', createdData.id).select('id, order_id, gross_amount, expires_at').single()
   if (saveError || !saved) {
-    return serverError('QRIS sudah dibuat Midtrans tetapi gagal disiapkan di aplikasi. Jangan buat pembayaran baru sebelum admin memeriksa transaksi Midtrans.', 500)
+    return serverError('QRIS berhasil disiapkan tetapi gagal disimpan. Periksa Riwayat QRIS sebelum mencoba ulang.', 500)
   }
 
   return json({ id: saved.id, orderId: saved.order_id, amount: Number(saved.gross_amount),
-    qrString: charge.qr_string, expiresAt: saved.expires_at })
+    qrString, expiresAt: saved.expires_at })
 })

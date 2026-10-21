@@ -3,8 +3,10 @@ import { Activity, RefreshCw, QrCode } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { GlassPanel } from '@/components/shared/glass-panel'
 import { useInventory } from '@/hooks/use-inventory'
+import { useToast } from '@/hooks/use-toast'
 import { formatCurrency } from '@/lib/format'
 import { demoEnabled, supabase } from '@/lib/supabase'
 
@@ -22,15 +24,15 @@ type QrisPayment = {
 
 function paymentState(payment: QrisPayment) {
   if (payment.status === 'pending' && new Date(payment.expires_at).getTime() <= Date.now()) {
-    return { label: 'Kedaluwarsa · notifikasi belum diterima', tone: 'border-amber-300/25 bg-amber-300/10 text-amber-100' }
+    return { label: 'Batas reservasi lewat · cek GoBiz', tone: 'border-amber-300/25 bg-amber-300/10 text-amber-100' }
   }
   const states = {
     creating: { label: 'Menyiapkan QR', tone: 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100' },
     pending: { label: 'Menunggu pembayaran', tone: 'border-amber-300/25 bg-amber-300/10 text-amber-100' },
     paid: { label: 'Lunas', tone: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100' },
-    expired: { label: 'Kedaluwarsa', tone: 'border-white/15 bg-white/6 text-white/65' },
-    failed: { label: 'Gagal', tone: 'border-rose-300/25 bg-rose-300/10 text-rose-100' },
-    inventory_error: { label: 'Dana diterima · stok perlu ditinjau', tone: 'border-orange-300/25 bg-orange-300/10 text-orange-100' },
+    expired: { label: 'Batas reservasi lewat · cek GoBiz', tone: 'border-amber-300/25 bg-amber-300/10 text-amber-100' },
+    failed: { label: 'Gagal menyiapkan QR', tone: 'border-rose-300/25 bg-rose-300/10 text-rose-100' },
+    inventory_error: { label: 'Dana dikonfirmasi · stok perlu ditinjau', tone: 'border-orange-300/25 bg-orange-300/10 text-orange-100' },
   }
   return states[payment.status]
 }
@@ -42,9 +44,12 @@ function dateLabel(value: string | null) {
 
 export function QrisHistoryPage() {
   const { activeStore, mode } = useInventory()
+  const { showToast } = useToast()
   const activeStoreId = activeStore?.id
   const [payments, setPayments] = useState<QrisPayment[]>([])
   const [loading, setLoading] = useState(false)
+  const [confirmingId, setConfirmingId] = useState('')
+  const [completedAmount, setCompletedAmount] = useState<number | null>(null)
   const [error, setError] = useState('')
 
   const refresh = useCallback(async (showSpinner = true) => {
@@ -71,6 +76,28 @@ export function QrisHistoryPage() {
     }
   }, [activeStoreId])
 
+  const confirmPayment = async (payment: QrisPayment) => {
+    const client = supabase
+    if (!client || confirmingId) return
+    setConfirmingId(payment.id)
+    try {
+      const { data, error: confirmError } = await client.rpc('confirm_qris_payment', { p_payment_id: payment.id })
+      if (confirmError) throw confirmError
+      const result = data as { status?: string; message?: string } | null
+      if (result?.status === 'paid') {
+        setCompletedAmount(Number(payment.gross_amount))
+        showToast(`Pembayaran ${formatCurrency(Number(payment.gross_amount))} dikonfirmasi.`, 'success')
+      }
+      else if (result?.status === 'inventory_error') showToast('Dana dikonfirmasi, tetapi stok perlu ditinjau admin.', 'error')
+      else throw new Error('Status pembayaran tidak dikenali. Muat ulang riwayat QRIS.')
+      await refresh(false)
+    } catch (failure) {
+      showToast(failure instanceof Error ? failure.message : 'Konfirmasi QRIS gagal.', 'error')
+    } finally {
+      setConfirmingId('')
+    }
+  }
+
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(false) }, 0)
     return () => window.clearTimeout(timer)
@@ -92,7 +119,7 @@ export function QrisHistoryPage() {
       <div>
         <p className="text-sm text-cyan-100/70">Pembayaran</p>
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Riwayat Transaksi QRIS</h1>
-        <p className="mt-2 text-sm text-white/60">Status lunas hanya mengikuti konfirmasi resmi GoPay/Midtrans.</p>
+        <p className="mt-2 text-sm text-white/60">Kasir mengecek dana masuk di GoBiz lalu mengonfirmasi pembayaran di aplikasi. Batas waktu hanya melepas reservasi stok; QR mungkin masih dapat dibayar.</p>
       </div>
       <Button type="button" variant="outline" onClick={() => void refresh()} disabled={loading || demoEnabled}>
         <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
@@ -113,7 +140,8 @@ export function QrisHistoryPage() {
       : <div className="grid gap-3">
         {payments.map(payment => {
           const state = paymentState(payment)
-          return <GlassPanel key={payment.id} className="grid gap-3 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          const canConfirm = ['pending', 'expired', 'inventory_error'].includes(payment.status)
+          return <GlassPanel key={payment.id} className="grid gap-3 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-center">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-mono text-sm font-semibold text-white">{payment.order_id}</h2>
@@ -123,8 +151,24 @@ export function QrisHistoryPage() {
               {payment.failure_reason ? <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-100/85"><Activity className="mt-0.5 size-3 shrink-0" />{payment.failure_reason}</p> : null}
             </div>
             <p className="font-mono text-lg font-semibold text-white">{formatCurrency(Number(payment.gross_amount))}</p>
+            {canConfirm ? <Button type="button" variant={payment.status === 'inventory_error' ? 'outline' : 'default'}
+              disabled={Boolean(confirmingId)} onClick={() => void confirmPayment(payment)}>
+              {confirmingId === payment.id ? 'Menyimpan…' : payment.status === 'inventory_error' ? 'Coba simpan stok' : 'Konfirmasi dibayar'}
+            </Button> : null}
           </GlassPanel>
         })}
       </div>}
+
+    <Dialog open={completedAmount !== null} onOpenChange={open => { if (!open) setCompletedAmount(null) }}>
+      <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-white">Transaksi selesai</DialogTitle>
+          <DialogDescription className="text-white/62">
+            Pembayaran QRIS {completedAmount === null ? '' : formatCurrency(completedAmount)} telah dicatat dan stok diperbarui.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter><Button type="button" onClick={() => setCompletedAmount(null)}>Oke</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 }

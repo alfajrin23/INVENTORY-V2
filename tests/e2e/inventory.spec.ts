@@ -360,7 +360,7 @@ for (const category of ['masuk','keluar']) {
   })
 }
 
-test('QRIS checkout stays pending without a live backend and QR history is reachable from settings', async ({ page }) => {
+test('QRIS checkout requires Supabase and QR history is reachable from settings', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/')
   await page.getByRole('button', { name: 'Scan', exact: true }).click()
@@ -370,8 +370,8 @@ test('QRIS checkout stays pending without a live backend and QR history is reach
 
   await page.getByRole('button', { name: 'Proses', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Pilih pembayaran' })).toBeVisible()
-  await page.getByRole('button', { name: /QRIS GoPay/ }).click()
-  await expect(page.getByText(/memerlukan koneksi Supabase dan akun Midtrans merchant aktif/)).toBeVisible()
+  await page.getByRole('button', { name: /^QRIS/ }).click()
+  await expect(page.getByText(/memerlukan koneksi Supabase dan QRIS merchant di menu Pengaturan/)).toBeVisible()
   expect((await data(page)).products[0].stok).toBe(before.products[0].stok)
   expect((await data(page)).history).toHaveLength(before.history.length)
 

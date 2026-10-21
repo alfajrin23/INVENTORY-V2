@@ -19,6 +19,7 @@ import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
 import { fetchQrisImage, uploadQrisImage } from '@/lib/media-storage'
+import { decodeStaticQrisImage } from '@/lib/qris-image'
 import { demoEnabled, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -68,9 +69,10 @@ export function SettingsPage() {
     }
     setQrisUploading(true)
     try {
-      const url = await uploadQrisImage(file)
+      const decoded = await decodeStaticQrisImage(file)
+      const url = await uploadQrisImage(file, decoded.payload)
       setQrisImage(url)
-      showToast('Gambar referensi QRIS berhasil diperbarui.', 'success')
+      showToast(`QRIS ${decoded.merchantName} siap membuat nominal dinamis.`, 'success')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Gambar QRIS gagal disimpan.', 'error')
     } finally {
@@ -209,7 +211,7 @@ export function SettingsPage() {
         </div>
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-cyan-100"><QrCode className="size-5" /><h2 className="font-semibold">Pengaturan QRIS</h2></div>
-          <p className="text-sm text-white/62">Ganti gambar QRIS referensi toko. Pembayaran dinamis per transaksi tetap dibuat oleh GoPay/Midtrans; gambar ini tidak dipakai sebagai QR pembayaran otomatis.</p>
+          <p className="text-sm text-white/62">Unggah QRIS statis ABElektronik yang sesuai dengan akun GoBiz. Aplikasi mengisi nominal dan referensi di QR untuk tiap transaksi; kasir tetap harus mengecek pembayaran di GoBiz.</p>
           <input ref={qrisFileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => void handleQrisImageChange(event.target.files?.[0])} />
           <Button type="button" variant="outline" disabled={qrisUploading || demoEnabled || !supabase} onClick={() => qrisFileInput.current?.click()}>
             {qrisUploading ? <Image className="size-4 animate-pulse" /> : <Upload className="size-4" />}
@@ -293,7 +295,7 @@ export function SettingsPage() {
             <span className="settings-icon info"><QrCode /></span>
             <span>
               <strong>Riwayat QRIS</strong>
-              <small>Status pembayaran GoPay/QRIS</small>
+              <small>Riwayat dan konfirmasi pembayaran QRIS</small>
             </span>
             <ChevronRight size={17} />
           </Link>
