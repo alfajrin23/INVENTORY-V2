@@ -143,6 +143,8 @@ export async function showQrisPaymentNotification(storeName: string, amount: str
     smallIcon: 'ic_stat_inventory',
     largeIcon: 'ic_inventory_gradient',
     iconColor: '#0D9488',
+    isExactNotification: false,
+    isExactMandatory: false,
     autoCancel: true,
   }] })
   return true

@@ -11,6 +11,7 @@ const CURRENT_RELEASE_SUMMARY = [
   'Riwayat QRIS ada di menu Laporan, setelah Belanja, dengan pencarian nominal/tanggal, rentang tanggal, dan pengurutan.',
   'Pengaturan gambar QRIS dipindah ke bagian paling bawah halaman Pengaturan.',
   'Tombol Voice kembali ke posisi semula di navigasi bawah HP.',
+  'Konfirmasi pembayaran QRIS tidak lagi meminta akses Alarm & pengingat Android.',
   'Peningkatan tampilan dan kestabilan transaksi QRIS.',
 ]
 
