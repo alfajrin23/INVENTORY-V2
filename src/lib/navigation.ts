@@ -46,7 +46,6 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Dashboard', path: routes.dashboard, icon: Home, group: 'utama' },
   { label: 'Data Barang', path: routes.products, icon: Package, group: 'utama' },
   { label: 'History Barang', path: routes.history, icon: History, group: 'utama' },
-  { label: 'Transaksi QRIS', path: routes.qrisHistory, icon: QrCode, group: 'utama' },
   { label: 'Laporan', path: routes.reports, icon: ClipboardList, group: 'utama' },
   { label: 'Pengaturan', path: routes.settings, icon: Settings, group: 'utama' },
   { label: 'Barang Masuk', path: routes.incomingReport, icon: PackagePlus, group: 'laporan' },
@@ -54,12 +53,12 @@ export const navigationItems: NavigationItem[] = [
   { label: 'Stok Barang', path: routes.stockReport, icon: PackageCheck, group: 'laporan' },
   { label: 'Pendapatan', path: routes.revenueYear, icon: BarChart3, group: 'laporan' },
   { label: 'Belanja', path: routes.shopping, icon: ShoppingCart, group: 'laporan' },
+  { label: 'Transaksi QRIS', path: routes.qrisHistory, icon: QrCode, group: 'laporan' },
 ]
 
 export const mobileNavigation = [
   { label: 'Home', path: routes.dashboard, icon: Home },
   { label: 'Barang', path: routes.products, icon: Package },
-  { label: 'QRIS', path: routes.qrisHistory, icon: QrCode },
   { label: 'Laporan', path: routes.reports, icon: TrendingUp },
   { label: 'Setelan', path: routes.settings, icon: Settings },
 ]

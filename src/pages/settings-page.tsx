@@ -205,21 +205,6 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-5">
-      <GlassPanel className="grid gap-4 p-4 sm:grid-cols-[9rem_1fr] sm:items-center" glow="cyan">
-        <div className="flex min-h-32 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white p-2">
-          <img src={qrisImage} alt="Gambar referensi QRIS ABElektronik" className="max-h-44 w-full object-contain" />
-        </div>
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-cyan-100"><QrCode className="size-5" /><h2 className="font-semibold">Pengaturan QRIS</h2></div>
-          <p className="text-sm text-white/62">Unggah QRIS statis ABElektronik yang sesuai dengan akun GoBiz. Aplikasi mengisi nominal dan referensi di QR untuk tiap transaksi; kasir tetap harus mengecek pembayaran di GoBiz.</p>
-          <input ref={qrisFileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => void handleQrisImageChange(event.target.files?.[0])} />
-          <Button type="button" variant="outline" disabled={qrisUploading || demoEnabled || !supabase} onClick={() => qrisFileInput.current?.click()}>
-            {qrisUploading ? <Image className="size-4 animate-pulse" /> : <Upload className="size-4" />}
-            {qrisUploading ? 'Menyimpan gambar…' : 'Ganti gambar QRIS'}
-          </Button>
-          {demoEnabled ? <p className="text-xs text-amber-100/70">Mode demo: penyimpanan gambar perlu koneksi Supabase.</p> : null}
-        </div>
-      </GlassPanel>
       <div className="mobile-settings lg:hidden">
         <div className="mobile-page-heading">
           <div>
@@ -409,6 +394,22 @@ export function SettingsPage() {
         </button>
       </GlassPanel>
       </div>
+
+      <GlassPanel className="grid gap-4 p-4 sm:grid-cols-[9rem_1fr] sm:items-center" glow="cyan">
+        <div className="flex min-h-32 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white p-2">
+          <img src={qrisImage} alt="Gambar referensi QRIS ABElektronik" className="max-h-44 w-full object-contain" />
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-cyan-100"><QrCode className="size-5" /><h2 className="font-semibold">Pengaturan QRIS</h2></div>
+          <p className="text-sm text-white/62">Unggah QRIS statis ABElektronik yang sesuai dengan akun GoBiz. Aplikasi mengisi nominal dan referensi di QR untuk tiap transaksi; kasir tetap harus mengecek pembayaran di GoBiz.</p>
+          <input ref={qrisFileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => void handleQrisImageChange(event.target.files?.[0])} />
+          <Button type="button" variant="outline" disabled={qrisUploading || demoEnabled || !supabase} onClick={() => qrisFileInput.current?.click()}>
+            {qrisUploading ? <Image className="size-4 animate-pulse" /> : <Upload className="size-4" />}
+            {qrisUploading ? 'Menyimpan gambar…' : 'Ganti gambar QRIS'}
+          </Button>
+          {demoEnabled ? <p className="text-xs text-amber-100/70">Mode demo: penyimpanan gambar perlu koneksi Supabase.</p> : null}
+        </div>
+      </GlassPanel>
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-lg">

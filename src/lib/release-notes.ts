@@ -7,9 +7,11 @@ const CACHE_KEY = 'ab:release-notes-cache:v1'
 export const LAST_SEEN_RELEASE_NOTES_KEY = 'ab:last-seen-release-notes-version:v1'
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const CURRENT_RELEASE_SUMMARY = [
-  'Harga barang sekarang ditampilkan pada hasil pencarian di Scanner.',
-  'Informasi merek barang sekarang ikut tercetak pada resi transaksi.',
-  'Peningkatan tampilan dan stabilitas aplikasi.',
+  'Pembayaran QRIS memakai nominal sesuai total keranjang; kasir mengonfirmasi setelah mengecek dana di GoBiz.',
+  'Riwayat QRIS ada di menu Laporan, setelah Belanja, dengan pencarian nominal/tanggal, rentang tanggal, dan pengurutan.',
+  'Pengaturan gambar QRIS dipindah ke bagian paling bawah halaman Pengaturan.',
+  'Tombol Voice kembali ke posisi semula di navigasi bawah HP.',
+  'Peningkatan tampilan dan kestabilan transaksi QRIS.',
 ]
 
 export type ReleaseNote = {
@@ -66,6 +68,23 @@ function fallbackNote(version: string): ReleaseNote {
   }
 }
 
+function compareVersions(left: string, right: string) {
+  const leftParts = normalizeVersion(left).split('.').map(part => Number.parseInt(part, 10) || 0)
+  const rightParts = normalizeVersion(right).split('.').map(part => Number.parseInt(part, 10) || 0)
+  const length = Math.max(leftParts.length, rightParts.length)
+  for (let index = 0; index < length; index += 1) {
+    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0)
+    if (difference) return Math.sign(difference)
+  }
+  return 0
+}
+
+function includeCurrentFallback(releases: ReleaseNote[], currentVersion: string) {
+  if (releases.some(release => normalizeVersion(release.version) === currentVersion)) return releases
+  if (releases.length && compareVersions(currentVersion, releases[0].version) < 0) return releases
+  return [fallbackNote(currentVersion), ...releases].slice(0, 10)
+}
+
 function readCache(): CacheValue | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY)
@@ -100,8 +119,11 @@ export async function getCurrentAppVersion() {
 
 export async function loadReleaseNotes(force = false): Promise<ReleaseNote[]> {
   const cached = readCache()
+  const currentVersion = await getCurrentAppVersion()
   if (!force && cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS && cached.releases.length) {
-    return cached.releases
+    const releases = includeCurrentFallback(cached.releases, currentVersion)
+    if (releases !== cached.releases) writeCache(releases)
+    return releases
   }
 
   try {
@@ -126,15 +148,15 @@ export async function loadReleaseNotes(force = false): Promise<ReleaseNote[]> {
       })
       .filter(release => release.version)
     if (releases.length) {
-      writeCache(releases)
-      return releases
+      const releasesWithCurrent = includeCurrentFallback(releases, currentVersion)
+      writeCache(releasesWithCurrent)
+      return releasesWithCurrent
     }
   } catch {
-    if (cached?.releases.length) return cached.releases
+    if (cached?.releases.length) return includeCurrentFallback(cached.releases, currentVersion)
   }
 
-  const version = await getCurrentAppVersion()
-  const fallback = [fallbackNote(version)]
+  const fallback = [fallbackNote(currentVersion)]
   writeCache(fallback)
   return fallback
 }
