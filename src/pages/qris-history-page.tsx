@@ -18,6 +18,7 @@ type QrisPayment = {
   gross_amount: number | string
   status: 'creating' | 'pending' | 'paid' | 'expired' | 'failed' | 'inventory_error'
   provider_status: string | null
+  confirmation_source: 'manual' | 'notification' | 'provider' | null
   failure_reason: string | null
   created_at: string
   expires_at: string
@@ -69,7 +70,7 @@ export function QrisHistoryPage() {
     try {
       const { data, error: queryError } = await client
         .from('qris_payments')
-        .select('id, order_id, gross_amount, status, provider_status, failure_reason, created_at, expires_at, paid_at')
+        .select('id, order_id, gross_amount, status, provider_status, confirmation_source, failure_reason, created_at, expires_at, paid_at')
         .eq('store_id', activeStoreId)
         .order('created_at', { ascending: false })
         .limit(200)
@@ -167,7 +168,7 @@ export function QrisHistoryPage() {
       <div>
         <p className="text-sm text-cyan-100/70">Pembayaran</p>
         <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Riwayat Transaksi QRIS</h1>
-        <p className="mt-2 text-sm text-white/60">Kasir mengecek dana masuk di GoBiz lalu mengonfirmasi pembayaran di aplikasi. Batas waktu hanya melepas reservasi stok; QR mungkin masih dapat dibayar.</p>
+        <p className="mt-2 text-sm text-white/60">Pembayaran dapat dikonfirmasi manual setelah dicek di GoPay Merchant, atau otomatis dari notifikasi Android yang cocok nominalnya. Batas waktu hanya melepas reservasi stok; QR mungkin masih dapat dibayar.</p>
       </div>
       <Button type="button" variant="outline" onClick={() => void refresh()} disabled={loading || demoEnabled}>
         <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
@@ -243,12 +244,13 @@ export function QrisHistoryPage() {
                 <Badge className={state.tone}>{state.label}</Badge>
               </div>
               <p className="mt-1 text-xs text-white/55">Dibuat {dateLabel(payment.created_at)}{payment.paid_at ? ` · Lunas ${dateLabel(payment.paid_at)}` : ''}</p>
+              {payment.confirmation_source ? <p className="mt-1 text-xs text-cyan-100/65">Konfirmasi: {payment.confirmation_source === 'notification' ? 'Otomatis dari notifikasi' : payment.confirmation_source === 'manual' ? 'Manual setelah cek GoPay Merchant' : 'Provider'}</p> : null}
               {payment.failure_reason ? <p className="mt-2 flex items-start gap-1.5 text-xs text-rose-100/85"><Activity className="mt-0.5 size-3 shrink-0" />{payment.failure_reason}</p> : null}
             </div>
             <p className="font-mono text-lg font-semibold text-white">{formatCurrency(Number(payment.gross_amount))}</p>
             {canConfirm ? <Button type="button" variant={payment.status === 'inventory_error' ? 'outline' : 'default'}
               disabled={Boolean(confirmingId)} onClick={() => void confirmPayment(payment)}>
-              {confirmingId === payment.id ? 'Menyimpan…' : payment.status === 'inventory_error' ? 'Coba simpan stok' : 'Konfirmasi dibayar'}
+              {confirmingId === payment.id ? 'Menyimpan…' : payment.status === 'inventory_error' ? 'Coba simpan stok' : 'Konfirmasi manual · sudah cek GoPay Merchant'}
             </Button> : null}
           </GlassPanel>
         })}

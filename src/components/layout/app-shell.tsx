@@ -7,6 +7,7 @@ import {
   Moon,
   Mic,
   MessageCircle,
+  QrCode,
   ScanLine,
   Search,
   Settings,
@@ -51,7 +52,8 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const reduceMotion = useReducedMotion()
-  const { activeStore, stores, products, history, loading, mode, setActiveStore } = useInventory()
+  const { activeStore, stores, products, history, loading, mode, storeRole, setActiveStore } = useInventory()
+  const isCashier = storeRole === 'cashier' || (mode === 'supabase' && storeRole === null)
   const { showToast } = useToast()
   const { photo: profilePhoto } = useBrandingPhoto()
   const [scanOpen, setScanOpen] = useState(false)
@@ -73,12 +75,20 @@ export function AppShell() {
   }, [showToast])
   const [search, setSearch] = useState('')
   const groupedNav = useMemo(
-    () => ({
-      utama: navigationItems.filter((item) => item.group === 'utama'),
-      laporan: navigationItems.filter((item) => item.group === 'laporan'),
-    }),
-    [],
+    () => {
+      const accessible = isCashier
+        ? navigationItems.filter(item => item.path === routes.dashboard || item.path === routes.qrisHistory)
+        : navigationItems
+      return {
+        utama: accessible.filter((item) => item.group === 'utama'),
+        laporan: accessible.filter((item) => item.group === 'laporan'),
+      }
+    },
+    [isCashier],
   )
+  const mobileItems = isCashier
+    ? [...mobileNavigation.slice(0, 1), { label: 'QRIS', path: routes.qrisHistory, icon: QrCode }]
+    : mobileNavigation
   const searchResults = useMemo(() => {
     if (!search.trim()) {
       return []
@@ -102,7 +112,7 @@ export function AppShell() {
     const setup = async () => {
       const listener = await LocalNotifications.addListener('localNotificationActionPerformed', action => {
         navigate(routes.dashboard)
-        if (action.actionId === 'voice') {
+        if (action.actionId === 'voice' && !isCashier) {
           if (loadingRef.current) pendingNotificationVoice.current = true
           else setVoiceOpen(true)
         }
@@ -117,7 +127,7 @@ export function AppShell() {
       closed = true
       if (removeListener) void removeListener()
     }
-  }, [navigate, reportNotificationError])
+  }, [isCashier, navigate, reportNotificationError])
 
   const notificationStoreName = activeStore?.name ?? 'Inventory'
   const notificationContent = useMemo(
@@ -263,7 +273,7 @@ export function AppShell() {
             <p className="truncate text-xs text-white/52">{activeStore?.address?.split(',')[0] ?? 'Toko aktif'} · Toko aktif</p>
           </div>
 
-          <div className="relative hidden flex-1 lg:block">
+          <div className={cn('relative hidden flex-1 lg:block', isCashier && 'lg:hidden')}>
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/38" />
             <Input
               value={search}
@@ -355,7 +365,7 @@ export function AppShell() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem aria-label="Profil toko" onClick={() => navigate(routes.profile)}><Store className="size-4" />Profil toko</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate(routes.settings)}><Settings className="size-4" />Pengaturan</DropdownMenuItem>
+              {!isCashier ? <DropdownMenuItem onClick={() => navigate(routes.settings)}><Settings className="size-4" />Pengaturan</DropdownMenuItem> : null}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -371,7 +381,7 @@ export function AppShell() {
         </div>
       </header>
 
-      <Button aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)} className="fixed bottom-7 right-36 z-40 hidden h-[52px] bg-teal-700 text-white lg:inline-flex"><Mic />Voice AI</Button>
+      {!isCashier ? <Button aria-label="Buka Voice AI" onClick={() => setVoiceOpen(true)} className="fixed bottom-7 right-36 z-40 hidden h-[52px] bg-teal-700 text-white lg:inline-flex"><Mic />Voice AI</Button> : null}
       <main className="app-main px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -381,16 +391,29 @@ export function AppShell() {
             exit={reduceMotion ? undefined : { opacity: 0, y: -4, scale: 0.998 }}
             transition={{ duration: reduceMotion ? 0 : 0.18, ease: 'easeOut' }}
           >
-            <Outlet context={{ openScanner: () => setScanOpen(true), openVoice: () => setVoiceOpen(true), openWhatsApp: handleShutdown }} />
+            {isCashier && (location.pathname === routes.dashboard || location.pathname === '/index.html') ? (
+              <section className="mx-auto grid max-w-xl justify-items-center gap-4 rounded-3xl border border-cyan-200/15 bg-cyan-200/[0.05] p-7 text-center sm:p-10">
+                <ScanLine className="size-10 text-cyan-100" />
+                <div><h1 className="text-2xl font-bold text-white">Transaksi barang keluar</h1><p className="mt-2 text-sm text-white/55">Pindai barcode barang untuk mencatat penjualan di {activeStore?.name ?? 'cabang aktif'}.</p></div>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button type="button" onClick={() => setScanOpen(true)} className="bg-cyan-300 text-slate-950 hover:bg-cyan-200"><ScanLine className="size-4" />Scan barang</Button>
+                  <Button type="button" variant="outline" onClick={() => navigate(routes.qrisHistory)}>Riwayat QRIS</Button>
+                </div>
+              </section>
+            ) : isCashier && ![routes.qrisHistory, routes.profile].includes(location.pathname) ? (
+              <section role="alert" className="mx-auto max-w-xl rounded-2xl border border-amber-200/15 bg-amber-200/[0.06] p-6 text-center text-sm text-amber-50/80">Akun kasir hanya dapat mencatat barang keluar melalui pemindaian barcode. <Button type="button" variant="outline" className="mt-4" onClick={() => navigate(routes.dashboard)}>Kembali ke transaksi</Button></section>
+            ) : (
+              <Outlet context={{ openScanner: () => setScanOpen(true), openVoice: () => setVoiceOpen(true), openWhatsApp: handleShutdown }} />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
 
-      <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_1fr_72px_1fr_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
-        {mobileNavigation.slice(0, 2).map((item) => (
+      <nav aria-label="Navigasi mobile" className={cn('mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden', isCashier ? 'grid-cols-[1fr_72px_1fr]' : 'grid-cols-[1fr_1fr_72px_1fr_1fr]')}>
+        {mobileItems.slice(0, isCashier ? 1 : 2).map((item) => (
           <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />
         ))}
-        <button
+        {isCashier ? <button type="button" aria-label="Scan barang keluar" title="Scan barang keluar" onClick={() => setScanOpen(true)} className="-mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-cyan-300 text-slate-950 ring-4 ring-cyan-100/20 shadow-[0_18px_45px_rgba(0,210,255,0.32)]"><ScanLine className="size-5" /></button> : <button
           type="button"
           aria-label="Buka Voice AI"
           title="Voice AI"
@@ -398,8 +421,8 @@ export function AppShell() {
           className="nav-voice -mt-10 -translate-y-3 flex size-16 items-center justify-center justify-self-center rounded-full bg-teal-800 text-white ring-4 ring-teal-200/25 shadow-[0_18px_45px_rgba(0,210,255,0.32)] transition-[transform,box-shadow] duration-200 hover:scale-[1.03] active:scale-95"
         >
           <Mic className="size-5" />
-        </button>
-        {mobileNavigation.slice(2).map((item) => (
+        </button>}
+        {mobileItems.slice(isCashier ? 1 : 2).map((item) => (
           <MobileNavItem key={item.path} item={item} active={isActive(location.pathname, item.path)} />
         ))}
       </nav>

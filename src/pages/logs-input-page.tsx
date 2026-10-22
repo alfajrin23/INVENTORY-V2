@@ -173,7 +173,7 @@ export function LogsInputPage() {
                         {log.afterData ? auditValues(log, log.afterData) : 'Dihapus'}
                       </TableCell>
                       <TableCell className="text-right text-xs text-white/42" title={log.actorId ?? undefined}>
-                        {mode === 'demo' ? 'Demo' : log.actorId ? 'Pemilik toko' : 'Sistem'}
+                        {mode === 'demo' ? 'Demo' : log.actorName ?? log.actorId ?? 'Sistem'}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -194,6 +194,7 @@ export function LogsInputPage() {
                     {log.beforeData && `${auditValues(log, log.beforeData)} ke `}
                     {log.afterData ? auditValues(log, log.afterData) : 'Dihapus'}
                   </p>
+                  <p className="mt-2 break-all text-xs text-white/42">Oleh: {mode === 'demo' ? 'Demo' : log.actorName ?? log.actorId ?? 'Sistem'}</p>
                 </div>
               ))}
             </div>

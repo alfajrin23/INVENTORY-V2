@@ -1,12 +1,12 @@
 import { databaseError, requireSupabase } from '@/lib/supabase'
 import type { InventoryRepository } from '@/lib/inventory-service'
-import type { AuditLog, HistoryItem, Product, ProductInput, StoreInput, StoreRecord, TransactionResult } from '@/lib/types'
+import type { AuditLog, HistoryItem, Product, ProductInput, StoreInput, StoreRecord, StoreRole, TransactionResult } from '@/lib/types'
 
 const PAGE_SIZE = 1000
-const STORE_COLUMNS = 'id,name,address,address_link,photo,created_at,updated_at'
+const STORE_COLUMNS = 'id,owner_id,name,address,address_link,photo,created_at,updated_at'
 const PRODUCT_COLUMNS = 'id,store_id,nama_barang,brand,harga,stok,barcode,created_at,updated_at'
 const HISTORY_COLUMNS = 'id,store_id,product_id,barcode,tanggal,nama_barang,brand,kategori,jumlah,harga,keterangan,oleh,updated_at'
-const AUDIT_COLUMNS = 'id,store_id,actor_id,entity,action,record_id,before_data,after_data,created_at'
+const AUDIT_COLUMNS = 'id,store_id,actor_id,actor_name,entity,action,record_id,before_data,after_data,created_at'
 
 const selectColumns = {
   stores: STORE_COLUMNS,
@@ -14,7 +14,7 @@ const selectColumns = {
   history: HISTORY_COLUMNS,
 } as const
 
-const names: Record<string, string> = { store_id: 'storeId', product_id: 'productId', actor_id: 'actorId', record_id: 'recordId', before_data: 'beforeData', after_data: 'afterData', nama_barang: 'namaBarang', address_link: 'addressLink', created_at: 'createdAt', updated_at: 'updatedAt' }
+const names: Record<string, string> = { store_id: 'storeId', owner_id: 'ownerId', product_id: 'productId', actor_id: 'actorId', actor_name: 'actorName', record_id: 'recordId', before_data: 'beforeData', after_data: 'afterData', nama_barang: 'namaBarang', address_link: 'addressLink', created_at: 'createdAt', updated_at: 'updatedAt' }
 function fromRow<T>(row: Record<string, unknown>): T {
   return Object.fromEntries(Object.entries(row).map(([key, value]) => [names[key] ?? key, value])) as T
 }
@@ -36,7 +36,8 @@ async function readRows(table: 'stores' | 'products' | 'history', options: ReadR
   const rows: Record<string, unknown>[] = []
   const pageSize = options.pageSize ?? PAGE_SIZE
   for (let offset = 0; ; offset += pageSize) {
-    let query = requireSupabase().from(table).select(selectColumns[table])
+    const client: any = requireSupabase()
+    let query = client.from(table).select(selectColumns[table])
     if (options.storeId) query = query.eq('store_id', options.storeId)
     if (table === 'history') {
       query = query.order('tanggal', { ascending: false }).order('id')
@@ -65,19 +66,29 @@ export const supabaseRepository: InventoryRepository = {
     const allStores = await storesRequest
     const activeStore = allStores.find(s => s.id === storedId) ?? allStores[0] ?? null
     if (!activeStore) {
-      const empty = { stores: allStores, activeStore: null, products: [], history: [] }
+      const empty = { stores: allStores, activeStore: null, storeRole: null, products: [], history: [] }
       onPartial?.(empty)
       return empty
     }
     localStorage.setItem('activeStoreId', activeStore.id)
+    const client = requireSupabase()
+    const roleRequest = client.rpc('current_store_role', { p_store_id: activeStore.id })
+    const userRequest = client.auth.getUser()
     const productRows = await (storedId === activeStore.id ? productRequest! : readRows('products', { storeId: activeStore.id }))
+    const roleResult = await roleRequest
+    const userResult = await userRequest
+    if (userResult.error || !userResult.data.user) throw new Error('Sesi login tidak valid. Silakan masuk kembali.')
+    const storeRole = (roleResult.data as StoreRole | null)
+      ?? (activeStore.ownerId === userResult.data.user.id ? 'owner' : null)
+    if (roleResult.error && !storeRole) throw databaseError(roleResult.error)
+    if (!storeRole) throw new Error('Akses ke cabang ini sudah tidak aktif. Pilih cabang lain atau hubungi pemilik toko.')
     const products = productRows.map(fromRow<Product>)
-    onPartial?.({ stores: allStores, activeStore, products, history: [] })
+    onPartial?.({ stores: allStores, activeStore, storeRole, products, history: [] })
     const historyRows = await readRows('history', {
       storeId: activeStore.id,
-      onFirstPage: rows => onPartial?.({ stores: allStores, activeStore, products, history: rows.map(fromRow<HistoryItem>) }),
+      onFirstPage: rows => onPartial?.({ stores: allStores, activeStore, storeRole, products, history: rows.map(fromRow<HistoryItem>) }),
     })
-    return { stores: allStores, activeStore, products, history: historyRows.map(fromRow<HistoryItem>) }
+    return { stores: allStores, activeStore, storeRole, products, history: historyRows.map(fromRow<HistoryItem>) }
   },
   async setActiveStore(id) { localStorage.setItem('activeStoreId', id) },
   async addStore(store) {

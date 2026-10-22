@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
-import { buildDynamicQris, MAX_QRIS_AMOUNT } from '../_shared/qris-payload.mjs'
+import { buildDynamicQris, MAX_QRIS_AMOUNT, validateStaticQris } from '../_shared/qris-payload.mjs'
 import { supabasePublicKey, supabaseServiceKey } from '../_shared/supabase-keys.mjs'
 
 const corsHeaders = {
@@ -77,9 +77,21 @@ Deno.serve(async request => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
+  const { data: branding, error: brandingError } = await admin
+    .from('app_branding')
+    .select('qris_payload')
+    .eq('id', 'default')
+    .single()
+  if (brandingError || typeof branding?.qris_payload !== 'string' || !branding.qris_payload) {
+    return serverError('Data QRIS statis belum tersedia. Atur gambar QRIS di menu Pengaturan.', 503)
+  }
+  let merchantName: string
+  try { merchantName = validateStaticQris(branding.qris_payload).merchantName }
+  catch { return serverError('QRIS statis di Pengaturan tidak valid. Unggah ulang gambar QRIS merchant.', 409) }
+
   const { data: previous, error: previousError } = await admin
     .from('qris_payments')
-    .select('id, store_id, created_by, order_id, gross_amount, status, qris_string, provider_status, expires_at')
+    .select('id, store_id, created_by, order_id, gross_amount, status, qris_string, provider_status, created_at, expires_at')
     .eq('client_request_id', body.clientRequestId)
     .maybeSingle()
   if (previousError) return serverError('Riwayat permintaan QRIS gagal dibaca.', 500)
@@ -89,18 +101,9 @@ Deno.serve(async request => {
     }
     if (previous.status === 'pending' && previous.qris_string && previous.provider_status === 'manual_local') {
       return json({ id: previous.id, orderId: previous.order_id, amount: Number(previous.gross_amount),
-        qrString: previous.qris_string, expiresAt: previous.expires_at })
+        qrString: previous.qris_string, merchantName, createdAt: previous.created_at, expiresAt: previous.expires_at })
     }
     return serverError('Permintaan QRIS ini sudah pernah diproses. Periksa Riwayat QRIS sebelum mencoba lagi.', 409)
-  }
-
-  const { data: branding, error: brandingError } = await admin
-    .from('app_branding')
-    .select('qris_payload')
-    .eq('id', 'default')
-    .single()
-  if (brandingError || typeof branding?.qris_payload !== 'string' || !branding.qris_payload) {
-    return serverError('Data QRIS statis belum tersedia. Atur gambar QRIS di menu Pengaturan.', 503)
   }
 
   const orderId = `ABE-${crypto.randomUUID().replaceAll('-', '').toUpperCase()}`
@@ -133,11 +136,11 @@ Deno.serve(async request => {
     status: 'pending',
     provider_status: 'manual_local',
     expires_at: expiresAt,
-  }).eq('id', createdData.id).select('id, order_id, gross_amount, expires_at').single()
+  }).eq('id', createdData.id).select('id, order_id, gross_amount, created_at, expires_at').single()
   if (saveError || !saved) {
     return serverError('QRIS berhasil disiapkan tetapi gagal disimpan. Periksa Riwayat QRIS sebelum mencoba ulang.', 500)
   }
 
   return json({ id: saved.id, orderId: saved.order_id, amount: Number(saved.gross_amount),
-    qrString, expiresAt: saved.expires_at })
+    qrString, merchantName, createdAt: saved.created_at, expiresAt: saved.expires_at })
 })

@@ -1,4 +1,5 @@
 export type TransactionCategory = 'masuk' | 'keluar'
+export type StoreRole = 'owner' | 'manager' | 'cashier'
 
 export type StoreRecord = {
   id: string
@@ -6,6 +7,7 @@ export type StoreRecord = {
   address: string
   addressLink: string
   photo?: string
+  ownerId?: string
   createdAt: string
   updatedAt?: string
 }
@@ -42,6 +44,7 @@ export type AuditLog = {
   id: string
   storeId: string
   actorId?: string | null
+  actorName?: string | null
   entity: 'store' | 'product' | 'transaction'
   action: 'insert' | 'update' | 'delete'
   recordId: string
@@ -85,6 +88,7 @@ export type TransactionInput = {
 export type InventorySnapshot = {
   stores: StoreRecord[]
   activeStore: StoreRecord | null
+  storeRole: StoreRole | null
   products: Product[]
   history: HistoryItem[]
 }

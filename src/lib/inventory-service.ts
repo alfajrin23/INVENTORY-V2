@@ -126,6 +126,7 @@ function getActiveLocalSnapshot(data: LocalData): InventorySnapshot {
   return {
     stores: data.stores,
     activeStore,
+    storeRole: activeStore ? 'owner' : null,
     products: data.products.filter((product) => product.storeId === activeStore?.id),
     history: data.history.filter((item) => item.storeId === activeStore?.id),
   }

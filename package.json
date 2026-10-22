@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "playwright test",
     "test:db": "node tests/database.mjs",
+    "test:employee-access": "node tests/employee-access.mjs",
     "test:qris": "node --test tests/qris.test.mjs",
     "cap:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",

@@ -33,6 +33,7 @@ type InventoryContextValue = InventorySnapshot & {
 const emptySnapshot: InventorySnapshot = {
   stores: [],
   activeStore: null,
+  storeRole: null,
   products: [],
   history: [],
 }
@@ -111,7 +112,9 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       if (cached) {
         productsReadyRef.current = true
         setProductsReady(true)
-        setSnapshot(cached.snapshot)
+        setSnapshot(repository.mode === 'supabase'
+          ? { ...cached.snapshot, storeRole: null }
+          : cached.snapshot)
         setLoading(false)
         lastRefreshAt.current = cached.savedAt
         void refresh(true)
@@ -183,6 +186,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       setSnapshot(current => ({
         ...current,
         activeStore,
+        storeRole: null,
         products: cached?.snapshot.products ?? [],
         history: cached?.snapshot.history ?? [],
       }))
@@ -196,6 +200,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       updateSnapshot(current => ({
         stores: [created, ...current.stores.filter(item => item.id !== created.id)],
         activeStore: created,
+        storeRole: 'owner',
         products: [],
         history: [],
       }))

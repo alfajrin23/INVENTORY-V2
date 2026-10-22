@@ -43,6 +43,7 @@ test('Supabase repository: login → voice RPC → lost-response retry → manua
     }
     restRequests.push(`${method} ${url.pathname}`)
     try {
+      if(url.pathname==='/rest/v1/rpc/current_store_role') { await route.fulfill({headers,json:'owner'}); return }
       if(url.pathname==='/rest/v1/rpc/process_inventory_transaction') {
         const p=route.request().postDataJSON();rpcIds.push(p.p_request_id)
         const {rows}=await runQuery(()=>db.query<{result: unknown}>('select process_inventory_transaction($1,$2,$3,$4::jsonb,$5,$6,$7) as result',[p.p_store_id,p.p_request_id,p.p_category,JSON.stringify(p.p_items),p.p_note,p.p_operator,p.p_date]))
@@ -138,6 +139,7 @@ test('account settings shows Supabase email update detail', async ({ page }) => 
       await route.fulfill({ headers, json: user })
       return
     }
+    if (url.pathname === '/rest/v1/rpc/current_store_role') { await route.fulfill({ headers, json: 'owner' }); return }
     if (url.pathname === '/rest/v1/stores') { await route.fulfill({ headers, json: [{ id: store, owner_id: uid, name: 'Toko Akun', address: '', address_link: '', created_at: new Date().toISOString() }] }); return }
     if (url.pathname === '/rest/v1/products' || url.pathname === '/rest/v1/history' || url.pathname === '/rest/v1/audit_logs') {
       await route.fulfill({ headers, json: [] })
@@ -174,6 +176,7 @@ test('product data appears while transaction history is still loading', async ({
     if (route.request().method() === 'OPTIONS') { await route.fulfill({ status: 200, headers, body: '' }); return }
     if (pathname === '/auth/v1/token') { await route.fulfill({ headers, json: { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } }); return }
     if (pathname === '/auth/v1/user') { await route.fulfill({ headers, json: user }); return }
+    if (pathname === '/rest/v1/rpc/current_store_role') { await route.fulfill({ headers, json: 'owner' }); return }
     if (pathname === '/rest/v1/stores') { await route.fulfill({ headers, json: [{ id: store, owner_id: uid, name: 'Toko Cepat', address: '', address_link: '', created_at: new Date().toISOString() }] }); return }
     if (pathname === '/rest/v1/products') { await route.fulfill({ headers, json: [{ id: '00000000-0000-4000-8000-000000000020', store_id: store, nama_barang: 'Lampu Cepat', brand: 'Philips', harga: 15000, stok: 5, barcode: '987', created_at: new Date().toISOString() }] }); return }
     if (pathname === '/rest/v1/history') { historyRequested = true; await historyGate; await route.fulfill({ headers, json: [] }); return }
@@ -211,6 +214,7 @@ test('QRIS checkout explains an unreachable Edge Function and keeps stock untouc
     if (method === 'OPTIONS') { await route.fulfill({ status: 200, headers, body: '' }); return }
     if (url.pathname === '/auth/v1/token') { await route.fulfill({ headers, json: { access_token: token, refresh_token: 'test-refresh', expires_in: 3600, token_type: 'bearer', user } }); return }
     if (url.pathname === '/auth/v1/user') { await route.fulfill({ headers, json: user }); return }
+    if (url.pathname === '/rest/v1/rpc/current_store_role') { await route.fulfill({ headers, json: 'owner' }); return }
     if (url.pathname === '/rest/v1/stores') {
       await route.fulfill({ headers, json: [{ id: store, owner_id: uid, name: 'Toko QRIS', address: '', address_link: '', created_at: new Date().toISOString() }] })
       return

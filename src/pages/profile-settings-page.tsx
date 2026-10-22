@@ -1,8 +1,9 @@
-import { Camera, CheckCircle2, Edit3, MapPin, Plus, Store, Trash2, Upload, X } from 'lucide-react'
+import { Camera, CheckCircle2, Edit3, LogOut, MapPin, Plus, Store, Trash2, Upload, X } from 'lucide-react'
 import { useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { ErrorState } from '@/components/shared/data-state'
+import { EmployeeManager } from '@/components/profile/employee-manager'
 import { GlassPanel } from '@/components/shared/glass-panel'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -23,6 +24,7 @@ import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { uploadStorePhoto, validateImageFile } from '@/lib/media-storage'
 import { routes } from '@/lib/navigation'
+import { demoEnabled, supabase } from '@/lib/supabase'
 import type { StoreInput, StoreRecord } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -48,6 +50,7 @@ export function ProfileSettingsPage() {
   const {
     activeStore,
     stores,
+    storeRole,
     error,
     refresh,
     setActiveStore,
@@ -63,6 +66,8 @@ export function ProfileSettingsPage() {
   const [storePhotoFile, setStorePhotoFile] = useState<File | null>(null)
   const [storePhotoPreview, setStorePhotoPreview] = useState('')
   const [saving, setSaving] = useState(false)
+  const canManageStores = storeRole === 'owner' || storeRole === 'manager'
+  const isOwner = storeRole === 'owner'
 
   const handleProfilePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -178,13 +183,25 @@ export function ProfileSettingsPage() {
     catch (e) { showToast(e instanceof Error ? e.message : 'Toko gagal dihapus', 'error') }
   }
 
+  const signOut = async () => {
+    if (!supabase || demoEnabled) return
+    const { error: signOutError } = await supabase.auth.signOut()
+    if (signOutError) showToast('Gagal keluar. Periksa koneksi lalu coba lagi.', 'error')
+    else navigate(routes.dashboard)
+  }
+
   if (error) return <ErrorState message={error} onRetry={() => void refresh()} />
 
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm text-cyan-100/70">Store Profile</p>
-        <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Profil & Multi-Store</h1>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm text-cyan-100/70">Profil Pengguna</p>
+            <h1 className="mt-1 text-3xl font-bold text-white lg:text-4xl">Profil & Multi-Store</h1>
+          </div>
+          {!demoEnabled ? <Button type="button" variant="outline" onClick={() => void signOut()}><LogOut className="size-4" />Keluar</Button> : null}
+        </div>
       </div>
 
       <section className="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
@@ -195,10 +212,10 @@ export function ProfileSettingsPage() {
                 <AvatarImage src={profilePhoto || activeStore?.photo} />
                 <AvatarFallback className="bg-cyan-300 text-xl font-bold text-slate-950">AB</AvatarFallback>
               </Avatar>
-              <label className="absolute -bottom-1 -right-1 flex size-9 cursor-pointer items-center justify-center rounded-full bg-cyan-300 text-slate-950 shadow-lg">
+              {canManageStores ? <label className="absolute -bottom-1 -right-1 flex size-9 cursor-pointer items-center justify-center rounded-full bg-cyan-300 text-slate-950 shadow-lg">
                 <Camera className="size-4" />
                 <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={event => void handleProfilePhoto(event)} />
-              </label>
+              </label> : null}
             </div>
             <div className="min-w-0">
               <h2 className="truncate text-xl font-semibold text-white">{activeStore?.name ?? 'ABElektronik'}</h2>
@@ -228,10 +245,9 @@ export function ProfileSettingsPage() {
               <h2 className="text-xl font-semibold text-white">Daftar Toko</h2>
               <p className="text-sm text-white/52">{stores.length} toko tersimpan</p>
             </div>
-            <Button type="button" onClick={openAddStore} className="bg-emerald-300 text-slate-950 hover:bg-emerald-200">
-              <Plus className="size-4" />
-              Tambah Toko
-            </Button>
+              {isOwner ? <Button type="button" onClick={openAddStore} className="bg-emerald-300 text-slate-950 hover:bg-emerald-200">
+                <Plus className="size-4" />Tambah Toko
+              </Button> : null}
           </div>
 
           <div className="space-y-3">
@@ -262,14 +278,14 @@ export function ProfileSettingsPage() {
                         {store.address}
                       </p>
                     </button>
-                    <div className="flex gap-1">
+                    {canManageStores ? <div className="flex gap-1">
                       <Button type="button" variant="outline" size="icon-sm" aria-label={`Edit toko ${store.name}`} onClick={() => openEditStore(store)}>
                         <Edit3 className="size-4" />
                       </Button>
                       <Button type="button" variant="ghost" size="icon-sm" aria-label={`Hapus toko ${store.name}`} onClick={() => void removeStore(store)} className="text-rose-200">
                         <Trash2 className="size-4" />
                       </Button>
-                    </div>
+                    </div> : null}
                   </div>
                 </div>
               )
@@ -277,6 +293,8 @@ export function ProfileSettingsPage() {
           </div>
         </GlassPanel>
       </section>
+
+      <EmployeeManager />
 
       <Dialog open={storeDialogOpen} onOpenChange={setStoreDialogOpen}>
         <DialogContent className="max-h-[92vh] overflow-y-auto border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-2xl max-lg:top-auto max-lg:bottom-0 max-lg:left-0 max-lg:max-w-none max-lg:translate-x-0 max-lg:translate-y-0 max-lg:rounded-b-none max-lg:rounded-t-3xl">

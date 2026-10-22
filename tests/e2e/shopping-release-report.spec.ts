@@ -65,7 +65,7 @@ test('release notes appears once per installed version and appears again when ve
   const whatsNew = page.getByRole('dialog').filter({ hasText: 'Yang Baru di Inventory V2' })
   await expect(whatsNew).toBeVisible()
   await whatsNew.getByRole('button', { name: 'Mengerti' }).click()
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab:last-seen-release-notes-version:v1'))).toBe('1.2.1')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab:last-seen-release-notes-version:v1'))).toBe('1.2.3')
 
   await page.reload()
   await page.waitForTimeout(1200)
