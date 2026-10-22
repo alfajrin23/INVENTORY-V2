@@ -252,13 +252,34 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
         },
       })
       if (error) throw new Error(await qrisFunctionErrorMessage(error))
-      if (!data || typeof data.qrString !== 'string' || typeof data.id !== 'string'
-          || typeof data.merchantName !== 'string' || typeof data.createdAt !== 'string'
-          || Number(data.amount) !== total) {
+      const amount = Number(data?.amount)
+      if (!data || typeof data.qrString !== 'string' || !data.qrString.trim()
+          || typeof data.id !== 'string' || !data.id.trim()) {
+        throw new Error('Layanan QRIS mengirim data pembayaran yang tidak lengkap. Transaksi belum dibuat.')
+      }
+      if (!Number.isSafeInteger(amount) || amount !== total) {
         throw new Error('QRIS dari server tidak sesuai dengan total keranjang. Transaksi belum dibuat.')
       }
+      const responseTime = new Date()
+      const createdAt = typeof data.createdAt === 'string' && Number.isFinite(Date.parse(data.createdAt))
+        ? data.createdAt
+        : responseTime.toISOString()
+      const expiresAt = typeof data.expiresAt === 'string' && Number.isFinite(Date.parse(data.expiresAt))
+        ? data.expiresAt
+        : new Date(responseTime.getTime() + 15 * 60 * 1000).toISOString()
+      const merchantName = typeof data.merchantName === 'string' && data.merchantName.trim()
+        ? data.merchantName.trim()
+        : 'ABElektronik'
       setQrisItems(items.map(item => ({ ...item })))
-      setQrisPayment({ id: data.id, orderId: data.orderId, amount: Number(data.amount), merchantName: data.merchantName, qrString: data.qrString, createdAt: data.createdAt, expiresAt: data.expiresAt })
+      setQrisPayment({
+        id: data.id,
+        orderId: typeof data.orderId === 'string' && data.orderId.trim() ? data.orderId : data.id,
+        amount,
+        merchantName,
+        qrString: data.qrString,
+        createdAt,
+        expiresAt,
+      })
       setQrisPaymentStatus('pending')
       setQrisOpen(true)
       setCartOpen(false)
