@@ -9,7 +9,9 @@ import com.getcapacitor.JSObject;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -20,7 +22,9 @@ public final class GoPayMerchantNotificationListener extends NotificationListene
         add("com.gojek.gopaymerchant");
         add("com.gojek.resto");
     }};
-    private static final Pattern RUPIAH_AMOUNT = Pattern.compile("(?i)\\b(?:rp\\.?|idr)\\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\\b");
+    private static final Pattern RUPIAH_AMOUNT = Pattern.compile("(?i)\\b(?:rp\\.?|idr)\\s*([0-9]{1,3}(?:[., ]?[0-9]{3})*|[0-9]+)\\b");
+    private static final Pattern PAYMENT_CONTEXT = Pattern.compile("(?i)\\b(pembayaran|payment|transaksi|qris)\\b");
+    private static final Pattern SUCCESS_CONTEXT = Pattern.compile("(?i)\\b(berhasil|diterima|sukses|successful|successfully|received|masuk|bertambah|ditambahkan|menerima|mendapatkan)\\b");
 
     @Override
     public void onNotificationPosted(StatusBarNotification notification) {
@@ -34,8 +38,20 @@ public final class GoPayMerchantNotificationListener extends NotificationListene
         append(text, extras.getCharSequence(Notification.EXTRA_TITLE_BIG));
         append(text, extras.getCharSequence(Notification.EXTRA_TEXT));
         append(text, extras.getCharSequence(Notification.EXTRA_BIG_TEXT));
+        append(text, extras.getCharSequence(Notification.EXTRA_SUB_TEXT));
+        append(text, extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT));
+        append(text, extras.getCharSequence(Notification.EXTRA_INFO_TEXT));
         CharSequence[] lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
         if (lines != null) for (CharSequence line : lines) append(text, line);
+        // Some merchant app versions place the visible text under custom extras.
+        for (String key : extras.keySet()) {
+            Object value = extras.get(key);
+            if (value instanceof CharSequence) append(text, (CharSequence) value);
+            else if (value instanceof CharSequence[]) {
+                for (CharSequence line : (CharSequence[]) value) append(text, line);
+            }
+        }
+        append(text, posted.tickerText);
         String message = text.toString().toLowerCase(Locale.ROOT);
         if (!looksLikeSuccessfulPayment(message)) return;
         Long amount = readSingleRupiahAmount(message);
@@ -58,28 +74,74 @@ public final class GoPayMerchantNotificationListener extends NotificationListene
     }
 
     private static boolean looksLikeSuccessfulPayment(String message) {
-        boolean payment = message.contains("pembayaran") || message.contains("transaksi") || message.contains("qris");
-        boolean success = message.contains("berhasil") || message.contains("diterima") || message.contains("sukses")
-            || message.contains("successful") || message.contains("received") || message.contains("uang masuk");
-        boolean failure = message.contains("gagal") || message.contains("ditolak") || message.contains("batal")
-            || message.contains("refund") || message.contains("pengembalian");
+        boolean payment = containsAny(message, "pembayaran", "payment", "transaksi", "qris", "saldo", "uang masuk", "dana masuk",
+            "uang diterima", "dana diterima", "menerima uang", "menerima dana");
+        boolean success = SUCCESS_CONTEXT.matcher(message).find()
+            || message.contains("uang masuk") || message.contains("dana masuk");
+        boolean failure = containsAny(message, "gagal", "ditolak", "dibatalkan", "batal", "cancelled", "canceled", "failed",
+            "refund", "pengembalian", "dikembalikan");
         return payment && success && !failure;
     }
 
     private static Long readSingleRupiahAmount(String message) {
         Matcher matcher = RUPIAH_AMOUNT.matcher(message);
-        Long found = null;
+        List<Long> amounts = new ArrayList<>();
+        List<Integer> starts = new ArrayList<>();
+        List<Integer> ends = new ArrayList<>();
         while (matcher.find()) {
-            String digits = matcher.group(1).replace(".", "").replace(",", "");
+            String digits = matcher.group(1).replaceAll("[., ]", "");
             try {
                 long amount = Long.parseLong(digits);
-                if (found != null) return null;
-                found = amount;
+                amounts.add(amount);
+                starts.add(matcher.start());
+                ends.add(matcher.end());
             } catch (NumberFormatException error) {
                 return null;
             }
         }
-        return found;
+        if (amounts.isEmpty()) return null;
+
+        Long onlyAmount = null;
+        boolean sameAmount = true;
+        for (Long amount : amounts) {
+            if (onlyAmount == null) onlyAmount = amount;
+            else if (!onlyAmount.equals(amount)) sameAmount = false;
+        }
+        if (sameAmount) return onlyAmount;
+
+        int bestScore = 0;
+        Long bestAmount = null;
+        boolean ambiguous = false;
+        for (int index = 0; index < amounts.size(); index++) {
+            int paymentDistance = nearestDistance(message, starts.get(index), ends.get(index), PAYMENT_CONTEXT);
+            int successDistance = nearestDistance(message, starts.get(index), ends.get(index), SUCCESS_CONTEXT);
+            int score = paymentDistance <= 48 ? 100 - paymentDistance : 0;
+            if (successDistance <= 24) score += 50 - successDistance;
+            if (score > bestScore) {
+                bestScore = score;
+                bestAmount = amounts.get(index);
+                ambiguous = false;
+            } else if (score == bestScore && score > 0 && !amounts.get(index).equals(bestAmount)) {
+                ambiguous = true;
+            }
+        }
+        return bestScore > 0 && !ambiguous ? bestAmount : null;
+    }
+
+    private static int nearestDistance(String message, int start, int end, Pattern context) {
+        Matcher matcher = context.matcher(message);
+        int nearest = Integer.MAX_VALUE;
+        while (matcher.find()) {
+            int distance = matcher.end() <= start ? start - matcher.end()
+                : matcher.start() >= end ? matcher.start() - end : 0;
+            if (distance < nearest) nearest = distance;
+        }
+        return nearest;
+    }
+
+    private static boolean containsAny(String message, String... phrases) {
+        for (String phrase : phrases) if (message.contains(phrase)) return true;
+        return false;
     }
 
     private static String fingerprint(String value) {

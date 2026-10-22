@@ -121,7 +121,12 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
   const submitLock = useRef(false)
   const completedPayment = useRef('')
   const notifiedPayment = useRef('')
+  const qrisConfirmationLock = useRef(false)
   const handledNotificationFingerprints = useRef(new Set<string>())
+  const deferredNotificationPayments = useRef(new Map<string, string>())
+  const notificationRetryAt = useRef(new Map<string, number>())
+  const notificationRetryDelay = useRef(new Map<string, number>())
+  const warnedNotificationFingerprints = useRef(new Set<string>())
   const [merchantNotificationAccess, setMerchantNotificationAccess] = useState(false)
 
 	  const commitTransaction = async (cart: CartItem[], kind: TransactionCategory) => {
@@ -315,7 +320,8 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
 
   const confirmQrisPayment = useCallback(async (notification?: MerchantPaymentNotification) => {
     const client = supabase
-    if (!client || !qrisPayment || qrisConfirming) return
+    if (!client || !qrisPayment || qrisConfirmationLock.current) return false
+    qrisConfirmationLock.current = true
     setQrisConfirming(true)
     try {
       const { data, error } = await client.rpc('confirm_qris_payment', notification ? {
@@ -332,6 +338,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
         setQrisPaymentStatus('paid')
         await completeQrisPayment(qrisPayment.id)
         if (notification) showToast(`Notifikasi GoPay cocok dengan ${formatCurrency(notification.amount)} dan satu QRIS aktif. Pembayaran dikonfirmasi.`, 'success')
+        return true
       } else if (result?.status === 'inventory_error') {
         setQrisPaymentStatus('inventory_error')
         setQrisFailure(result.message ?? 'Dana diterima, tetapi stok perlu ditinjau admin.')
@@ -340,33 +347,50 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
           notifiedPayment.current = qrisPayment.id
           void showQrisPaymentNotification(activeStore.name, formatCurrency(qrisPayment.amount)).catch(() => {})
         }
+        return true
       } else {
         throw new Error('Status konfirmasi QRIS tidak dikenali. Periksa Riwayat QRIS.')
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Konfirmasi pembayaran QRIS gagal.', 'error')
+      return false
     } finally {
+      qrisConfirmationLock.current = false
       setQrisConfirming(false)
     }
-  }, [activeStore, completeQrisPayment, qrisConfirming, qrisPayment, showToast])
+  }, [activeStore, completeQrisPayment, qrisPayment, showToast])
 
   const handleConfirmQrisPayment = () => { void confirmQrisPayment() }
 
+  const scheduleNotificationRetry = useCallback((fingerprint: string, minimumDelay = 5_000) => {
+    const previousDelay = notificationRetryDelay.current.get(fingerprint) ?? minimumDelay
+    const nextDelay = Math.min(Math.max(minimumDelay, previousDelay * 2), 5 * 60_000)
+    notificationRetryDelay.current.set(fingerprint, nextDelay)
+    notificationRetryAt.current.set(fingerprint, Date.now() + nextDelay)
+  }, [])
+
   const handleMerchantNotification = useCallback(async (notification: MerchantPaymentNotification) => {
     if (!isValidMerchantPaymentNotification(notification) || !qrisPayment || !activeStore
-        || qrisPaymentStatus !== 'pending' || handledNotificationFingerprints.current.has(notification.fingerprint)) return
+        || qrisPaymentStatus !== 'pending' || handledNotificationFingerprints.current.has(notification.fingerprint)
+        || deferredNotificationPayments.current.get(notification.fingerprint) === qrisPayment.id
+        || (notificationRetryAt.current.get(notification.fingerprint) ?? 0) > Date.now()) return
     handledNotificationFingerprints.current.add(notification.fingerprint)
 
     const notificationAt = new Date(notification.notificationAt)
     const createdAt = new Date(qrisPayment.createdAt)
     const expiresAt = new Date(qrisPayment.expiresAt)
     if (notification.amount !== qrisPayment.amount || notificationAt < createdAt || notificationAt > expiresAt) {
-      await QrisNotificationAccess.consumeNotification({ fingerprint: notification.fingerprint }).catch(() => undefined)
+      handledNotificationFingerprints.current.delete(notification.fingerprint)
+      deferredNotificationPayments.current.set(notification.fingerprint, qrisPayment.id)
       return
     }
 
     const client = supabase
-    if (!client) return
+    if (!client) {
+      handledNotificationFingerprints.current.delete(notification.fingerprint)
+      scheduleNotificationRetry(notification.fingerprint)
+      return
+    }
     const notificationTime = notificationAt.toISOString()
     const { data, error } = await client.from('qris_payments').select('id')
       .eq('store_id', activeStore.id)
@@ -376,30 +400,59 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       .gte('expires_at', notificationTime)
     if (error) {
       handledNotificationFingerprints.current.delete(notification.fingerprint)
-      showToast('Notifikasi terbaca, tetapi daftar pembayaran belum dapat diperiksa. Konfirmasi manual setelah cek GoBiz.', 'info')
+      scheduleNotificationRetry(notification.fingerprint)
+      if (!warnedNotificationFingerprints.current.has(notification.fingerprint)) {
+        warnedNotificationFingerprints.current.add(notification.fingerprint)
+        showToast('Notifikasi terbaca, tetapi daftar pembayaran belum dapat diperiksa. Sistem akan mencoba lagi otomatis.', 'info')
+      }
       return
     }
     if (data?.length !== 1 || data[0]?.id !== qrisPayment.id) {
-      await QrisNotificationAccess.consumeNotification({ fingerprint: notification.fingerprint }).catch(() => undefined)
-      showToast('Nominal notifikasi cocok dengan lebih dari satu atau tidak ada QRIS aktif. Cek GoBiz lalu konfirmasi manual.', 'info')
+      handledNotificationFingerprints.current.delete(notification.fingerprint)
+      scheduleNotificationRetry(notification.fingerprint, 30_000)
+      if (!warnedNotificationFingerprints.current.has(notification.fingerprint)) {
+        warnedNotificationFingerprints.current.add(notification.fingerprint)
+        showToast('Notifikasi terbaca, tetapi pembayaran belum dapat dipasangkan secara unik. Sistem akan mencoba lagi otomatis.', 'info')
+      }
       return
     }
 
-    await confirmQrisPayment(notification)
+    const confirmed = await confirmQrisPayment(notification)
+    if (!confirmed) {
+      handledNotificationFingerprints.current.delete(notification.fingerprint)
+      scheduleNotificationRetry(notification.fingerprint)
+      if (!warnedNotificationFingerprints.current.has(notification.fingerprint)) {
+        warnedNotificationFingerprints.current.add(notification.fingerprint)
+        showToast('Konfirmasi otomatis tertunda. Sistem akan mencoba lagi tanpa menghapus notifikasi.', 'info')
+      }
+      return
+    }
+
+    notificationRetryAt.current.delete(notification.fingerprint)
+    notificationRetryDelay.current.delete(notification.fingerprint)
+    deferredNotificationPayments.current.delete(notification.fingerprint)
+    warnedNotificationFingerprints.current.delete(notification.fingerprint)
     await QrisNotificationAccess.consumeNotification({ fingerprint: notification.fingerprint }).catch(() => undefined)
-  }, [activeStore, confirmQrisPayment, qrisPayment, qrisPaymentStatus, showToast])
+  }, [activeStore, confirmQrisPayment, qrisPayment, qrisPaymentStatus, scheduleNotificationRetry, showToast])
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return
     let alive = true
     let removeListener: (() => Promise<void>) | null = null
+    let retryTimer: number | undefined
+    let readingPending = false
     const checkAccess = () => {
       void QrisNotificationAccess.checkAccess().then(result => { if (alive) setMerchantNotificationAccess(result.enabled) }).catch(() => { if (alive) setMerchantNotificationAccess(false) })
     }
     checkAccess()
     window.addEventListener('focus', checkAccess)
-    if (!qrisOpen || !qrisPayment || qrisPaymentStatus !== 'pending') {
-      return () => { alive = false; window.removeEventListener('focus', checkAccess) }
+    document.addEventListener('visibilitychange', checkAccess)
+    if (!qrisPayment || qrisPaymentStatus !== 'pending') {
+      return () => {
+        alive = false
+        window.removeEventListener('focus', checkAccess)
+        document.removeEventListener('visibilitychange', checkAccess)
+      }
     }
     const setup = async () => {
       const access = await QrisNotificationAccess.checkAccess()
@@ -411,16 +464,28 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       })
       removeListener = () => listener.remove()
       if (!alive) { await listener.remove(); return }
-      const pending = await QrisNotificationAccess.getPendingNotifications()
-      pending.notifications.forEach(notification => { void handleMerchantNotification(notification) })
+      const processPendingNotifications = async () => {
+        if (readingPending || !alive) return
+        readingPending = true
+        try {
+          const pending = await QrisNotificationAccess.getPendingNotifications()
+          if (alive) pending.notifications.forEach(notification => { void handleMerchantNotification(notification) })
+        } finally {
+          readingPending = false
+        }
+      }
+      await processPendingNotifications()
+      retryTimer = window.setInterval(() => { void processPendingNotifications().catch(() => undefined) }, 5_000)
     }
     void setup().catch(() => showToast('Notifikasi pembayaran belum dapat dibaca. Konfirmasi manual setelah mengecek GoPay Merchant.', 'info'))
     return () => {
       alive = false
       window.removeEventListener('focus', checkAccess)
+      document.removeEventListener('visibilitychange', checkAccess)
+      if (retryTimer !== undefined) window.clearInterval(retryTimer)
       if (removeListener) void removeListener()
     }
-  }, [handleMerchantNotification, qrisOpen, qrisPayment, qrisPaymentStatus, showToast])
+  }, [handleMerchantNotification, merchantNotificationAccess, qrisPayment, qrisPaymentStatus, showToast])
 
   const openMerchantNotificationSettings = async () => {
     try {
@@ -449,7 +514,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
 
   useEffect(() => {
     const client = supabase
-    if (!qrisOpen || !qrisPayment || !client || qrisPaymentStatus !== 'pending') return
+    if (!qrisPayment || !client || qrisPaymentStatus !== 'pending') return
     let alive = true
     const checkStatus = async () => {
       const { data, error } = await client.from('qris_payments')
@@ -481,7 +546,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       window.clearInterval(poll)
       void client.removeChannel(channel)
     }
-  }, [qrisOpen, qrisPayment, qrisPaymentStatus, completeQrisPayment, showToast, activeStore])
+  }, [qrisPayment, qrisPaymentStatus, completeQrisPayment, showToast, activeStore])
 
   const handleMissingBarcode = (barcode: string) => {
     sessionStorage.setItem('pendingBarcode', barcode)

@@ -24,7 +24,7 @@ import java.util.List;
 public class ABQrisNotificationPlugin extends Plugin {
     private static final String PREFS = "ab_qris_notification_access";
     private static final String PENDING_EVENTS = "pending_events";
-    private static final long MAX_EVENT_AGE_MS = 15 * 60 * 1000L;
+    private static final long MAX_EVENT_AGE_MS = 24 * 60 * 60 * 1000L;
     private static volatile ABQrisNotificationPlugin activePlugin;
 
     @PluginMethod
@@ -98,7 +98,7 @@ public class ABQrisNotificationPlugin extends Plugin {
         }
         try {
             retained.add(new JSONObject(notification.toString()));
-            while (retained.size() > 20) retained.remove(0);
+            while (retained.size() > 100) retained.remove(0);
             JSONArray next = new JSONArray();
             for (JSONObject event : retained) next.put(event);
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
