@@ -52,12 +52,8 @@ public class ABQrisNotificationPlugin extends Plugin {
         activePlugin = this;
         JSONArray events = readPendingEvents(getContext());
         JSObject result = new JSObject();
-        try {
-            result.put("notifications", events);
-            call.resolve(result);
-        } catch (JSONException error) {
-            call.reject("Notifikasi pembayaran tidak dapat dibaca.", error);
-        }
+        result.put("notifications", events);
+        call.resolve(result);
     }
 
     @PluginMethod

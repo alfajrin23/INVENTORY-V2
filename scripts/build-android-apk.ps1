@@ -22,16 +22,28 @@ $env:PATH = "$jdkHome\bin;$sdkRoot\cmdline-tools\latest\bin;$sdkRoot\platform-to
 Push-Location $projectRoot
 try {
   npm run build
+  if ($LASTEXITCODE -ne 0) {
+    throw "Build web gagal dengan kode keluar $LASTEXITCODE."
+  }
   npx cap sync android
+  if ($LASTEXITCODE -ne 0) {
+    throw "Sinkronisasi Capacitor gagal dengan kode keluar $LASTEXITCODE."
+  }
 
   Push-Location (Join-Path $projectRoot 'android')
   try {
     .\gradlew.bat assembleDebug
+    if ($LASTEXITCODE -ne 0) {
+      throw "Build Android gagal dengan kode keluar $LASTEXITCODE."
+    }
   } finally {
     Pop-Location
   }
 
   $apkSource = Join-Path $projectRoot 'android/app/build/outputs/apk/debug/app-debug.apk'
+  if (!(Test-Path $apkSource)) {
+    throw "APK debug tidak ditemukan di $apkSource"
+  }
   $releaseDir = Join-Path $projectRoot 'release'
   $apkTarget = Join-Path $releaseDir 'ABElektronik-Inventory-debug.apk'
   New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
