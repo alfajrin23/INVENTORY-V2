@@ -115,7 +115,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         setSnapshot(repository.mode === 'supabase'
           ? { ...cached.snapshot, storeRole: null }
           : cached.snapshot)
-        setLoading(false)
+        if (repository.mode !== 'supabase') setLoading(false)
         lastRefreshAt.current = cached.savedAt
         void refresh(true)
       } else {
@@ -190,7 +190,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
         products: cached?.snapshot.products ?? [],
         history: cached?.snapshot.history ?? [],
       }))
-      if (cached) setLoading(false)
+      setLoading(!cached || repository.mode === 'supabase')
       await refresh(Boolean(cached))
     }),
     addStore: store => exclusive(async () => {

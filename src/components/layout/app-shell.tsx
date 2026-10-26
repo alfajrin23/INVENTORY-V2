@@ -202,7 +202,13 @@ export function AppShell() {
     showToast('Ringkasan WhatsApp disiapkan', 'success')
   }
 
-  if (loading && !productsReady) return <InitialAppSkeleton />
+  const waitingForNativeStoreRole = Capacitor.isNativePlatform()
+    && mode === 'supabase'
+    && Boolean(activeStore)
+    && storeRole === null
+    && loading
+
+  if ((loading && !productsReady) || waitingForNativeStoreRole) return <InitialAppSkeleton />
 
   return (
     <div className="app-frame min-h-screen text-white">
