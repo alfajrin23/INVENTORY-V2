@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBrandingPhoto } from '@/hooks/use-branding-photo'
 import { useInventory } from '@/hooks/use-inventory'
@@ -52,7 +53,7 @@ export function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const reduceMotion = useReducedMotion()
-  const { activeStore, stores, products, history, loading, mode, storeRole, setActiveStore } = useInventory()
+  const { activeStore, stores, products, history, loading, productsReady, mode, storeRole, setActiveStore } = useInventory()
   const isCashier = storeRole === 'cashier' || (mode === 'supabase' && storeRole === null)
   const { showToast } = useToast()
   const { photo: profilePhoto } = useBrandingPhoto()
@@ -200,6 +201,8 @@ export function AppShell() {
     window.open(target, '_blank', 'noopener,noreferrer')
     showToast('Ringkasan WhatsApp disiapkan', 'success')
   }
+
+  if (loading && !productsReady) return <InitialAppSkeleton />
 
   return (
     <div className="app-frame min-h-screen text-white">
@@ -437,6 +440,64 @@ export function AppShell() {
       </Button>
 
       <TransactionWorkflow key={activeStore?.id} scannerOpen={scanOpen} onScannerOpenChange={setScanOpen} voiceOpen={voiceOpen} onVoiceOpenChange={setVoiceOpen} />
+    </div>
+  )
+}
+
+function InitialAppSkeleton() {
+  return (
+    <div role="status" className="app-frame min-h-screen text-white" aria-busy="true" aria-label="Memuat data toko">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-white/10 bg-[#0f1725]/78 p-4 shadow-2xl backdrop-blur-2xl lg:flex">
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.06] p-3">
+          <Skeleton className="size-11 rounded-2xl" />
+          <div className="flex-1 space-y-2"><Skeleton className="h-4 w-28" /><Skeleton className="h-3 w-36" /></div>
+        </div>
+        <div className="mt-6 space-y-3">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+          <Skeleton className="h-10 w-full rounded-xl" />
+        </div>
+      </aside>
+
+      <header className="app-header sticky top-0 z-30 border-b border-white/10 bg-[#101827]/75 px-4 py-3 backdrop-blur-2xl lg:fixed lg:left-72 lg:right-0">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-10 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2 lg:hidden">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-48 max-w-full" />
+          </div>
+          <div className="hidden flex-1 space-y-2 lg:block"><Skeleton className="h-10 w-full rounded-xl" /></div>
+          <Skeleton className="size-11 shrink-0 rounded-2xl" />
+        </div>
+      </header>
+
+      <main className="app-main px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
+        <section
+          className="mx-auto grid max-w-xl justify-items-center gap-5 rounded-3xl border border-cyan-200/15 bg-cyan-200/[0.05] p-7 text-center sm:p-10"
+          aria-label="Memuat halaman transaksi"
+        >
+          <Skeleton className="size-14 rounded-2xl" />
+          <Skeleton className="h-9 w-64 max-w-full" />
+          <div className="grid w-full justify-items-center gap-2">
+            <Skeleton className="h-4 w-72 max-w-full" />
+            <Skeleton className="h-4 w-40 max-w-full" />
+          </div>
+          <div className="flex w-full flex-wrap justify-center gap-3">
+            <Skeleton className="h-12 w-36 rounded-xl" />
+            <Skeleton className="h-12 w-36 rounded-xl" />
+          </div>
+        </section>
+      </main>
+
+      <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_72px_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
+        <div className="flex min-h-14 flex-col items-center justify-center gap-1">
+          <Skeleton className="size-10 rounded-2xl" /><Skeleton className="h-3 w-10" />
+        </div>
+        <Skeleton className="-mt-10 -translate-y-3 size-16 justify-self-center rounded-full" />
+        <div className="flex min-h-14 flex-col items-center justify-center gap-1">
+          <Skeleton className="size-10 rounded-2xl" /><Skeleton className="h-3 w-10" />
+        </div>
+      </nav>
     </div>
   )
 }
