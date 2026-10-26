@@ -445,8 +445,10 @@ export function AppShell() {
 }
 
 function InitialAppSkeleton() {
+  const nativeApp = Capacitor.isNativePlatform()
+
   return (
-    <div role="status" className="app-frame min-h-screen text-white" aria-busy="true" aria-label="Memuat data toko">
+    <div role="status" className={cn('app-frame min-h-screen text-white', nativeApp && 'native-initial-loading')} aria-busy="true" aria-label="Memuat data toko">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 flex-col border-r border-white/10 bg-[#0f1725]/78 p-4 shadow-2xl backdrop-blur-2xl lg:flex">
         <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.06] p-3">
           <Skeleton className="size-11 rounded-2xl" />
@@ -472,32 +474,103 @@ function InitialAppSkeleton() {
       </header>
 
       <main className="app-main px-4 pb-28 pt-5 lg:ml-72 lg:px-8 lg:pb-10 lg:pt-24">
-        <section
-          className="mx-auto grid max-w-xl justify-items-center gap-5 rounded-3xl border border-cyan-200/15 bg-cyan-200/[0.05] p-7 text-center sm:p-10"
-          aria-label="Memuat halaman transaksi"
-        >
-          <Skeleton className="size-14 rounded-2xl" />
-          <Skeleton className="h-9 w-64 max-w-full" />
-          <div className="grid w-full justify-items-center gap-2">
-            <Skeleton className="h-4 w-72 max-w-full" />
-            <Skeleton className="h-4 w-40 max-w-full" />
-          </div>
-          <div className="flex w-full flex-wrap justify-center gap-3">
-            <Skeleton className="h-12 w-36 rounded-xl" />
-            <Skeleton className="h-12 w-36 rounded-xl" />
-          </div>
-        </section>
+        {nativeApp ? <NativeDashboardSkeleton /> : (
+          <section
+            className="mx-auto grid max-w-xl justify-items-center gap-5 rounded-3xl border border-cyan-200/15 bg-cyan-200/[0.05] p-7 text-center sm:p-10"
+            aria-label="Memuat halaman transaksi"
+          >
+            <Skeleton className="size-14 rounded-2xl" />
+            <Skeleton className="h-9 w-64 max-w-full" />
+            <div className="grid w-full justify-items-center gap-2">
+              <Skeleton className="h-4 w-72 max-w-full" />
+              <Skeleton className="h-4 w-40 max-w-full" />
+            </div>
+            <div className="flex w-full flex-wrap justify-center gap-3">
+              <Skeleton className="h-12 w-36 rounded-xl" />
+              <Skeleton className="h-12 w-36 rounded-xl" />
+            </div>
+          </section>
+        )}
       </main>
 
-      <nav aria-label="Navigasi mobile" className="mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid grid-cols-[1fr_72px_1fr] items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden">
-        <div className="flex min-h-14 flex-col items-center justify-center gap-1">
-          <Skeleton className="size-10 rounded-2xl" /><Skeleton className="h-3 w-10" />
-        </div>
-        <Skeleton className="-mt-10 -translate-y-3 size-16 justify-self-center rounded-full" />
-        <div className="flex min-h-14 flex-col items-center justify-center gap-1">
-          <Skeleton className="size-10 rounded-2xl" /><Skeleton className="h-3 w-10" />
-        </div>
+      <nav aria-label="Navigasi mobile" aria-hidden="true" className={cn('mobile-bottom-nav fixed inset-x-3 bottom-3 z-50 grid items-end rounded-t-3xl border border-white/12 bg-[#101827]/82 px-2 pb-2 pt-3 shadow-2xl backdrop-blur-2xl lg:hidden', nativeApp ? 'grid-cols-[1fr_1fr_72px_1fr_1fr]' : 'grid-cols-[1fr_72px_1fr]')}>
+        {nativeApp ? <>
+          <StartupNavItem />
+          <StartupNavItem />
+          <Skeleton className="-mt-10 -translate-y-3 size-16 justify-self-center rounded-full" />
+          <StartupNavItem />
+          <StartupNavItem />
+        </> : <>
+          <StartupNavItem />
+          <Skeleton className="-mt-10 -translate-y-3 size-16 justify-self-center rounded-full" />
+          <StartupNavItem />
+        </>}
       </nav>
+    </div>
+  )
+}
+
+function NativeDashboardSkeleton() {
+  return (
+    <div className="mobile-dashboard native-initial-dashboard" aria-label="Memuat ringkasan toko">
+      <div className="mobile-page-heading">
+        <div className="grid gap-2">
+          <Skeleton className="h-8 w-48 bg-[var(--mobile-elevated)]" />
+          <Skeleton className="h-4 w-32 bg-[var(--mobile-elevated)]" />
+        </div>
+        <Skeleton className="h-10 w-[84px] rounded-xl bg-[var(--mobile-elevated)]" />
+      </div>
+
+      <section className="revenue-hero" aria-label="Memuat pendapatan hari ini">
+        <Skeleton className="h-4 w-32 bg-white/20" />
+        <Skeleton className="mt-3 h-9 w-28 bg-white/20" />
+        <div className="mt-3 flex items-center gap-2">
+          <Skeleton className="h-6 w-20 rounded-full bg-white/20" />
+          <Skeleton className="h-3 w-28 bg-white/20" />
+        </div>
+      </section>
+
+      <section className="mobile-metrics" aria-label="Memuat metrik toko">
+        {['produk', 'transaksi', 'stok'].map((item) => (
+          <div key={item} className="flex min-h-[79px] min-w-0 flex-col items-start justify-center gap-1 rounded-[15px] border border-[var(--mobile-border)] bg-[var(--mobile-surface)] px-[11px] py-[9px]">
+            <Skeleton className="size-4 bg-[var(--mobile-elevated)]" />
+            <Skeleton className="h-3 w-16 max-w-full bg-[var(--mobile-elevated)]" />
+            <Skeleton className="h-5 w-8 bg-[var(--mobile-elevated)]" />
+          </div>
+        ))}
+      </section>
+
+      <section className="mobile-quick-actions" aria-label="Memuat aksi cepat">
+        {['masuk', 'keluar', 'scan', 'tambah'].map((item) => (
+          <div key={item} className="flex flex-col items-center gap-1.5">
+            <Skeleton className="size-[51px] rounded-[15px] bg-[var(--mobile-elevated)]" />
+            <Skeleton className="h-3 w-10 bg-[var(--mobile-elevated)]" />
+          </div>
+        ))}
+      </section>
+
+      <section className="mobile-chart-card" aria-label="Memuat grafik pendapatan tujuh hari">
+        <div className="section-heading">
+          <Skeleton className="h-5 w-36 bg-[var(--mobile-elevated)]" />
+          <Skeleton className="h-4 w-12 bg-[var(--mobile-elevated)]" />
+        </div>
+        <Skeleton className="mt-5 h-7 w-28 bg-[var(--mobile-elevated)]" />
+        <Skeleton className="mt-1 h-3 w-44 max-w-full bg-[var(--mobile-elevated)]" />
+        <div className="mt-2 grid h-[117px] grid-cols-7 items-end gap-[5px]" aria-hidden="true">
+          {[36, 74, 52, 88, 61, 42, 69].map((height, index) => (
+            <Skeleton key={index} className="w-full rounded-t-md bg-[var(--mobile-elevated)]" style={{ height: `${height}%` }} />
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function StartupNavItem() {
+  return (
+    <div className="flex min-h-14 flex-col items-center justify-center gap-1">
+      <Skeleton className="size-10 rounded-[13px]" />
+      <Skeleton className="h-3 w-10" />
     </div>
   )
 }
