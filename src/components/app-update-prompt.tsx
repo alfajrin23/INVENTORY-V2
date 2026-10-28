@@ -14,113 +14,13 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/hooks/use-toast'
 import { ABAppUpdate } from '@/lib/android-app-update'
-import { fallbackReleaseSummary, summarizeReleaseBody } from '@/lib/release-notes'
-
-const RELEASES_URL = 'https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=10'
-const UPDATE_CHECK_KEY = 'ab:last-update-check-at'
-const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
-
-type GitHubAsset = {
-  name: string
-  browser_download_url: string
-}
-
-type GitHubRelease = {
-  draft: boolean
-  prerelease: boolean
-  tag_name: string
-  name: string | null
-  body: string | null
-  published_at: string | null
-  assets: GitHubAsset[]
-}
-
-type AvailableUpdate = {
-  version: string
-  title: string
-  notes: string[]
-  apkUrl: string
-}
-
-type ParsedVersion = {
-  core: number[]
-  prerelease: Array<number | string> | null
-}
-
-function parseVersion(value: string): ParsedVersion | null {
-  const clean = value.trim().replace(/^v/i, '').split('+')[0]
-  const [coreText, prereleaseText] = clean.split('-', 2)
-  const coreParts = coreText.split('.').map(part => Number(part))
-  if (!coreParts.length || coreParts.some(part => !Number.isInteger(part) || part < 0)) return null
-  while (coreParts.length < 3) coreParts.push(0)
-
-  return {
-    core: coreParts,
-    prerelease: prereleaseText
-      ? prereleaseText.split('.').map(part => (/^\d+$/.test(part) ? Number(part) : part.toLowerCase()))
-      : null,
-  }
-}
-
-function compareVersions(left: string, right: string) {
-  const a = parseVersion(left)
-  const b = parseVersion(right)
-  if (!a || !b) return 0
-
-  const coreLength = Math.max(a.core.length, b.core.length)
-  for (let index = 0; index < coreLength; index += 1) {
-    const difference = (a.core[index] ?? 0) - (b.core[index] ?? 0)
-    if (difference) return Math.sign(difference)
-  }
-
-  if (a.prerelease === null && b.prerelease !== null) return 1
-  if (a.prerelease !== null && b.prerelease === null) return -1
-  if (a.prerelease === null || b.prerelease === null) return 0
-
-  const prereleaseLength = Math.max(a.prerelease.length, b.prerelease.length)
-  for (let index = 0; index < prereleaseLength; index += 1) {
-    const av = a.prerelease[index]
-    const bv = b.prerelease[index]
-    if (av === undefined) return -1
-    if (bv === undefined) return 1
-    if (av === bv) continue
-    if (typeof av === 'number' && typeof bv === 'number') return av > bv ? 1 : -1
-    if (typeof av === 'number') return -1
-    if (typeof bv === 'number') return 1
-    return av > bv ? 1 : -1
-  }
-
-  return 0
-}
-
-async function findAvailableUpdate(currentVersion: string): Promise<AvailableUpdate | null> {
-  const response = await fetch(RELEASES_URL, {
-    headers: { Accept: 'application/vnd.github+json' },
-    cache: 'no-store',
-  })
-  if (!response.ok) throw new Error(`GitHub release check gagal (${response.status})`)
-
-  const releases = (await response.json()) as GitHubRelease[]
-  const candidates = releases
-    .filter(release => !release.draft)
-    .map(release => {
-      const apk = release.assets.find(asset => asset.name.toLowerCase().endsWith('.apk'))
-      if (!apk) return null
-      const version = release.tag_name.replace(/^v/i, '')
-      if (compareVersions(version, currentVersion) <= 0) return null
-      const notes = summarizeReleaseBody(release.body)
-      return {
-        version,
-        title: release.name?.trim() || `Versi ${version}`,
-        notes: notes.length ? notes : fallbackReleaseSummary(),
-        apkUrl: apk.browser_download_url,
-      } satisfies AvailableUpdate
-    })
-    .filter((release): release is AvailableUpdate => Boolean(release))
-    .sort((a, b) => compareVersions(b.version, a.version))
-
-  return candidates[0] ?? null
-}
+import {
+  checkAvailableAppUpdate,
+  UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_CHECK_KEY,
+  UPDATE_DISMISSED_KEY,
+  type AvailableUpdate,
+} from '@/lib/app-update-service'
 
 export function AppUpdatePrompt() {
   const { showToast } = useToast()
@@ -134,25 +34,41 @@ export function AppUpdatePrompt() {
     if (!Capacitor.isNativePlatform()) return
 
     let cancelled = false
+    let checkInProgress = false
     const check = async () => {
+      if (checkInProgress) return
       const lastCheck = Number(localStorage.getItem(UPDATE_CHECK_KEY) ?? 0)
       if (Number.isFinite(lastCheck) && Date.now() - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
 
+      checkInProgress = true
       try {
         const current = await ABAppUpdate.getAppInfo()
-        const available = await findAvailableUpdate(current.versionName)
+        const { update: available } = await checkAvailableAppUpdate(current.versionName)
         localStorage.setItem(UPDATE_CHECK_KEY, String(Date.now()))
         if (!cancelled && available) {
           setUpdate(available)
-          setOpen(true)
+          if (localStorage.getItem(UPDATE_DISMISSED_KEY) !== available.version) setOpen(true)
         }
       } catch {
         // Update checks are best-effort and must never block inventory startup.
+      } finally {
+        checkInProgress = false
       }
     }
 
     void check()
-    return () => { cancelled = true }
+    const checkTimer = window.setInterval(() => { void check() }, UPDATE_CHECK_INTERVAL_MS)
+    const checkOnResume = () => {
+      if (!document.hidden) void check()
+    }
+    document.addEventListener('visibilitychange', checkOnResume)
+    window.addEventListener('focus', checkOnResume)
+    return () => {
+      cancelled = true
+      window.clearInterval(checkTimer)
+      document.removeEventListener('visibilitychange', checkOnResume)
+      window.removeEventListener('focus', checkOnResume)
+    }
   }, [])
 
   useEffect(() => {
@@ -227,9 +143,13 @@ export function AppUpdatePrompt() {
   }, [downloadUpdate, installing])
 
   if (!update) return null
+  const handleDialogChange = (nextOpen: boolean) => {
+    setOpen(nextOpen)
+    if (!nextOpen) localStorage.setItem(UPDATE_DISMISSED_KEY, update.version)
+  }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto border-white/12 bg-[#121827]/98 text-white shadow-2xl sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-white">

@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 const releaseNotesSeen = {
   name: 'ab:last-seen-release-notes-version:v1',
-  value: '1.2.7',
+  value: '1.2.8',
 }
 
 export default defineConfig({

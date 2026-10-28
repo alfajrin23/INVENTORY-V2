@@ -1,8 +1,10 @@
-import { Bell, ChevronRight, Database, History, Image, Info, LogOut, MessageCircle, Moon, QrCode, Save, ScrollText, ShieldCheck, Store, Sun, Upload, UserCog, X } from 'lucide-react'
+import { Bell, ChevronRight, Database, Download, History, Image, Info, LogOut, MessageCircle, Moon, QrCode, Save, ScrollText, ShieldCheck, Store, Sun, Upload, UserCog, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
+import { AppUpdateSettings } from '@/components/settings/app-update-settings'
+import { QrisVoiceSettings } from '@/components/settings/qris-voice-settings'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -268,6 +270,14 @@ export function SettingsPage() {
             </span>
             <ChevronRight size={17} />
           </button>
+          <a href="#app-update" className="settings-row">
+            <span className="settings-icon info"><Download /></span>
+            <span>
+              <strong>Update aplikasi</strong>
+              <small>Selaraskan versi APK dari GitHub</small>
+            </span>
+            <ChevronRight size={17} />
+          </a>
           <Link to={routes.history} className="settings-row">
             <span className="settings-icon incoming"><History /></span>
             <span>
@@ -345,6 +355,12 @@ export function SettingsPage() {
           <UserCog className="size-4" />
           Pengaturan Akun
         </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <a href="#app-update">
+            <Download className="size-4" />
+            Update Aplikasi
+          </a>
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -394,6 +410,9 @@ export function SettingsPage() {
         </button>
       </GlassPanel>
       </div>
+
+      <AppUpdateSettings />
+      <QrisVoiceSettings />
 
       <GlassPanel className="grid gap-4 p-4 sm:grid-cols-[9rem_1fr] sm:items-center" glow="cyan">
         <div className="flex min-h-32 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white p-2">

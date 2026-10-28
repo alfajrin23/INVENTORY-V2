@@ -127,9 +127,9 @@ async function mockAndroidPaymentSpeech(page: Page) {
         } as Record<string, string[]>)[name].map(method => ({ name: method, rtype: 'promise' })),
       ] }))
 
-    const nativePromise = (plugin: string, method: string, options: { notifications?: Array<{ id: number }> } = {}) => {
-      ;(window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { text?: string } }> }).nativeCalls.push({ plugin, method, options })
-      if (plugin === 'ABAppUpdate' && method === 'getAppInfo') return Promise.resolve({ versionName: '1.2.7', versionCode: 11 })
+    const nativePromise = (plugin: string, method: string, options: { notifications?: Array<{ id: number }>; text?: string; url?: string } = {}) => {
+      ;(window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { text?: string; url?: string; profile?: string } }> }).nativeCalls.push({ plugin, method, options })
+      if (plugin === 'ABAppUpdate' && method === 'getAppInfo') return Promise.resolve({ versionName: '1.2.8', versionCode: 12 })
       if (plugin === 'ABAppUpdate' && method === 'canInstallPackages') return Promise.resolve({ granted: true })
       if (plugin === 'ABQrisNotification' && method === 'checkAccess') return Promise.resolve({ enabled: true })
       if (plugin === 'ABQrisNotification' && method === 'getPendingNotifications') return Promise.resolve({ notifications: [paymentNotification()] })
@@ -145,7 +145,7 @@ async function mockAndroidPaymentSpeech(page: Page) {
       return Promise.resolve({})
     }
     Object.assign(window, {
-      nativeCalls: [] as Array<{ plugin: string; method: string; options?: { text?: string } }>,
+      nativeCalls: [] as Array<{ plugin: string; method: string; options?: { text?: string; url?: string; profile?: string } }>,
       androidBridge: {},
       Capacitor: {
         PluginHeaders: pluginHeaders,
@@ -225,8 +225,67 @@ test('successful GoPay notification speaks the confirmed QRIS amount on Android'
   await expect.poll(async () => page.evaluate(() =>
     (window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { text?: string } }> }).nativeCalls
       .find(call => call.plugin === 'ABPaymentSpeech' && call.method === 'speak')?.options?.text,
-  )).toBe('Pembayaran QRIS berhasil diterima sebesar lima belas ribu rupiah.')
+  )).toBe('Pembayaran Berhasil Melalui QRIS sebesar lima belas ribu rupiah.')
   expect(mock.qrisConfirmCalls()).toBe(1)
+})
+
+test('new GitHub APK triggers the update popup and can be downloaded from Settings', async ({ page }) => {
+  await mockAndroidPaymentSpeech(page)
+  const mock = await mockSignedInSupabase(page, 'owner')
+  const apkUrl = 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.9/ABElektronik-Inventory.apk'
+  await page.route('https://api.github.com/**', async route => {
+    await route.fulfill({
+      headers: { 'content-type': 'application/json' },
+      json: [{
+        draft: false,
+        prerelease: false,
+        tag_name: 'v1.2.9',
+        name: 'ABElektronik Inventory 1.2.9',
+        body: 'Update menu Pengaturan dan pilihan suara konfirmasi QRIS.',
+        published_at: new Date().toISOString(),
+        html_url: 'https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.9',
+        assets: [{ name: 'ABElektronik-Inventory.apk', browser_download_url: apkUrl }],
+      }],
+    })
+  })
+  await page.goto('/')
+  await page.getByLabel('Email', { exact: true }).fill('owner@example.test')
+  await page.getByLabel('Password', { exact: true }).fill('test-password')
+  await page.getByRole('button', { name: 'Masuk', exact: true }).click()
+  const updateDialog = page.getByRole('dialog').filter({ hasText: 'Update aplikasi tersedia' })
+  await expect(updateDialog).toBeVisible()
+  await updateDialog.getByRole('button', { name: 'Nanti' }).click()
+  await expect(page.getByText('Cabang QRIS').first()).toBeVisible()
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/pengaturan.html')
+  await page.getByRole('link', { name: /Update aplikasi/i }).click()
+  await page.getByRole('button', { name: 'Cek versi terbaru' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Versi 1.2.9 tersedia' })).toBeVisible()
+  await page.getByRole('button', { name: 'Download asset & update' }).click()
+
+  await expect.poll(async () => page.evaluate(() =>
+    (window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { url?: string } }> }).nativeCalls
+      .find(call => call.plugin === 'ABAppUpdate' && call.method === 'downloadAndInstall')?.options?.url,
+  )).toBe(apkUrl)
+})
+
+test('QRIS voice profile can be selected and previewed from Settings', async ({ page }) => {
+  await mockAndroidPaymentSpeech(page)
+  const mock = await mockSignedInSupabase(page, 'owner')
+  await mock.signIn()
+  await page.goto('/pengaturan.html')
+
+  await page.getByRole('button', { name: /Perempuan formal/ }).click()
+  await page.getByRole('button', { name: 'Putar contoh suara' }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Terpilih: Perempuan formal' })).toBeVisible()
+  await expect.poll(async () => page.evaluate(() =>
+    (window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { text?: string; profile?: string } }> }).nativeCalls
+      .find(call => call.plugin === 'ABPaymentSpeech' && call.method === 'speak')?.options,
+  )).toMatchObject({
+    profile: 'female_formal',
+    text: 'Pembayaran Berhasil Melalui QRIS sebesar seratus lima puluh ribu rupiah.',
+  })
 })
 
 test('owner can invite a manager by email and cashier is limited to outgoing scanner and QRIS history', async ({ page }) => {

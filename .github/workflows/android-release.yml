@@ -2,6 +2,9 @@ name: Android Release
 
 on:
   push:
+    branches:
+      - main
+      - feat/qris-dynamic-midtrans
     tags:
       - 'v*'
 
@@ -46,7 +49,17 @@ jobs:
           echo "AB_RELEASE_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "AB_RELEASE_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
           echo "AB_RELEASE_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
-          echo "AB_VERSION_NAME=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            VERSION_NAME="${GITHUB_REF_NAME#v}"
+          else
+            BASE_VERSION=$(node -p "require('./package.json').version")
+            if [[ "$BASE_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              VERSION_NAME="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.$((BASH_REMATCH[3] + 1))-commit.${GITHUB_RUN_NUMBER}"
+            else
+              echo "Versi package.json harus berbentuk major.minor.patch" && exit 1
+            fi
+          fi
+          echo "AB_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
           echo "AB_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
 
       - name: Build web and sync Capacitor
@@ -71,14 +84,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          extra_args=""
-          if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
-            extra_args="--prerelease"
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            extra_args=""
+            if [[ "${GITHUB_REF_NAME#v}" == *-* ]]; then
+              extra_args="--prerelease"
+            fi
+            gh release create "$GITHUB_REF_NAME" \
+              release/ABElektronik-Inventory.apk \
+              release/ABElektronik-Inventory.apk.sha256 \
+              --verify-tag \
+              --title "ABElektronik Inventory ${GITHUB_REF_NAME#v}" \
+              --generate-notes \
+              $extra_args
+          else
+            gh release create "v$AB_VERSION_NAME" \
+              release/ABElektronik-Inventory.apk \
+              release/ABElektronik-Inventory.apk.sha256 \
+              --target "$GITHUB_SHA" \
+              --title "ABElektronik Inventory $AB_VERSION_NAME" \
+              --notes "APK update otomatis dari commit $GITHUB_SHA pada branch $GITHUB_REF_NAME." \
+              --prerelease
           fi
-          gh release create "$GITHUB_REF_NAME" \
-            release/ABElektronik-Inventory.apk \
-            release/ABElektronik-Inventory.apk.sha256 \
-            --verify-tag \
-            --title "ABElektronik Inventory ${GITHUB_REF_NAME#v}" \
-            --generate-notes \
-            $extra_args
