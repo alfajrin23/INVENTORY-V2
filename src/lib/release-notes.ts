@@ -7,6 +7,7 @@ const CACHE_KEY = 'ab:release-notes-cache:v1'
 export const LAST_SEEN_RELEASE_NOTES_KEY = 'ab:last-seen-release-notes-version:v1'
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const CURRENT_RELEASE_SUMMARY = [
+  'Saat suara konfirmasi QRIS diputar, volume media dinaikkan sementara lalu dikembalikan ke pengaturan awal.',
   'Konfirmasi QRIS dibacakan sebagai audio aplikasi dengan pilihan suara perempuan atau pria dan contoh pemutaran.',
   'Menu Update Aplikasi memeriksa APK terbaru di GitHub Releases dan memasang versi baru tanpa menghapus data.',
   'Menu Update Aplikasi, suara QRIS, QRIS dasar, dan printer kini terbuka di halaman masing-masing.',

@@ -1,6 +1,8 @@
 package com.abelektronik.inventory;
 
+import android.content.Context;
 import android.media.AudioAttributes;
+import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Bundle;
 import android.os.Handler;
@@ -50,6 +52,8 @@ public class ABPaymentSpeechPlugin extends Plugin {
         final PluginCall call;
         final File audioFile;
         MediaPlayer player;
+        int previousMusicVolume = -1;
+        boolean mediaVolumeRaised;
 
         ActiveSpeech(PluginCall call, File audioFile) {
             this.call = call;
@@ -259,7 +263,14 @@ public class ABPaymentSpeechPlugin extends Plugin {
             player.setDataSource(active.audioFile.getAbsolutePath());
             player.setVolume(1.0f, 1.0f);
             player.setOnPreparedListener(prepared -> {
-                prepared.start();
+                raiseMediaVolume(active);
+                try {
+                    prepared.start();
+                } catch (RuntimeException error) {
+                    rejectActiveSpeech(utteranceId, "Audio media gagal memulai suara QRIS: " + error.getMessage() + ".");
+                    currentPlaybackId = null;
+                    startNextAudioPlayback();
+                }
             });
             player.setOnCompletionListener(completed -> {
                 completeActiveSpeech(utteranceId);
@@ -307,9 +318,46 @@ public class ABPaymentSpeechPlugin extends Plugin {
             active.player.release();
             active.player = null;
         }
+        restoreMediaVolume(active);
         if (active.audioFile.exists()) {
             //noinspection ResultOfMethodCallIgnored
             active.audioFile.delete();
+        }
+    }
+
+    private void raiseMediaVolume(ActiveSpeech active) {
+        try {
+            AudioManager audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager == null) return;
+
+            int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+            int maximumVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            if (currentVolume < 0 || maximumVolume <= currentVolume) return;
+
+            active.previousMusicVolume = currentVolume;
+            active.mediaVolumeRaised = true;
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maximumVolume, 0);
+        } catch (RuntimeException error) {
+            // Keep QRIS speech working if this Android device prevents programmatic volume changes.
+            restoreMediaVolume(active);
+        }
+    }
+
+    private void restoreMediaVolume(ActiveSpeech active) {
+        if (!active.mediaVolumeRaised) return;
+
+        int previousVolume = active.previousMusicVolume;
+        active.mediaVolumeRaised = false;
+        active.previousMusicVolume = -1;
+        if (previousVolume < 0) return;
+
+        try {
+            AudioManager audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager == null) return;
+            int maximumVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, Math.min(previousVolume, maximumVolume), 0);
+        } catch (RuntimeException ignored) {
+            // Audio playback and payment confirmation should not fail if restoring volume is blocked.
         }
     }
 
