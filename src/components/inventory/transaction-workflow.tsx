@@ -303,8 +303,11 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
   const announceQrisPayment = useCallback((paymentId: string, amount: number) => {
     if (spokenPayment.current === paymentId || !Capacitor.isNativePlatform()) return
     spokenPayment.current = paymentId
-    void speakQrisPaymentReceived(amount).catch(() => undefined)
-  }, [])
+    void speakQrisPaymentReceived(amount).catch(error => {
+      console.error('Suara konfirmasi QRIS gagal diputar.', error)
+      showToast('Pembayaran QRIS sudah dikonfirmasi, tetapi suara gagal diputar. Periksa volume media dan mesin Text-to-Speech Android.', 'error')
+    })
+  }, [showToast])
 
   const completeQrisPayment = useCallback(async (paymentId: string, receivedAmount?: number) => {
     if (completedPayment.current === paymentId || !activeStore) return

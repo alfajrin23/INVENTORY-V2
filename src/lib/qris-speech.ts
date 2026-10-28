@@ -6,6 +6,47 @@ type PaymentSpeechPlugin = {
 
 const PaymentSpeech = registerPlugin<PaymentSpeechPlugin>('ABPaymentSpeech')
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+    promise.then(value => {
+      window.clearTimeout(timer)
+      resolve(value)
+    }, error => {
+      window.clearTimeout(timer)
+      reject(error)
+    })
+  })
+}
+
+function speakWithWebView(text: string) {
+  if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance === 'undefined') {
+    return Promise.reject(new Error('Suara Text-to-Speech Android dan WebView tidak tersedia.'))
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    const synthesis = window.speechSynthesis
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'id-ID'
+    utterance.volume = 1
+    utterance.rate = 0.95
+    const timer = window.setTimeout(() => {
+      synthesis.cancel()
+      reject(new Error('WebView tidak menyelesaikan suara Text-to-Speech.'))
+    }, 15_000)
+
+    utterance.onend = () => {
+      window.clearTimeout(timer)
+      resolve()
+    }
+    utterance.onerror = event => {
+      window.clearTimeout(timer)
+      reject(new Error(`WebView gagal memutar Text-to-Speech (${event.error}).`))
+    }
+    synthesis.speak(utterance)
+  })
+}
+
 function indonesianNumberWords(value: number): string {
   const words = ['nol', 'satu', 'dua', 'tiga', 'empat', 'lima', 'enam', 'tujuh', 'delapan', 'sembilan', 'sepuluh', 'sebelas']
   if (value < 12) return words[value]
@@ -35,7 +76,20 @@ export async function speakQrisPaymentReceived(amount: number) {
   if (!Capacitor.isNativePlatform() || !Number.isSafeInteger(amount) || amount <= 0) return
 
   const amountWords = indonesianNumberWords(amount)
-  await PaymentSpeech.speak({
-    text: `Pembayaran QRIS berhasil diterima sebesar ${amountWords} rupiah.`,
-  })
+  const text = `Pembayaran QRIS berhasil diterima sebesar ${amountWords} rupiah.`
+  try {
+    await withTimeout(
+      PaymentSpeech.speak({ text }),
+      15_000,
+      'Android tidak menyelesaikan suara Text-to-Speech.',
+    )
+  } catch (nativeError) {
+    try {
+      await speakWithWebView(text)
+    } catch (webViewError) {
+      const nativeMessage = nativeError instanceof Error ? nativeError.message : 'Mesin TTS Android gagal.'
+      const webViewMessage = webViewError instanceof Error ? webViewError.message : 'Mesin TTS WebView gagal.'
+      throw new Error(`${nativeMessage} ${webViewMessage}`)
+    }
+  }
 }

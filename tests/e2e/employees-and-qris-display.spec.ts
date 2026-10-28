@@ -9,7 +9,7 @@ const ids = {
   product: '00000000-0000-4000-8000-000000000020',
 }
 
-async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', options: { qris?: boolean | 'legacy' | 'mismatched'; employeeInvite?: boolean } = {}) {
+async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', options: { qris?: boolean | 'legacy' | 'mismatched'; employeeInvite?: boolean; autoConfirmNotification?: boolean } = {}) {
   const userId = role === 'owner' ? ids.owner : ids.cashier
   const email = role === 'owner' ? 'owner@example.test' : 'cashier@example.test'
   const user = { id: userId, aud: 'authenticated', role: 'authenticated', email, created_at: new Date().toISOString(), app_metadata: {}, user_metadata: {} }
@@ -72,7 +72,20 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
       await route.fulfill({ headers, json: { ok: true } })
       return
     }
-    if (url.pathname === '/rest/v1/rpc/confirm_qris_payment') qrisConfirmCalls += 1
+    if (url.pathname === '/rest/v1/qris_payments' && options.autoConfirmNotification) {
+      const select = url.searchParams.get('select')
+      if (select === 'id') {
+        await route.fulfill({ headers, json: [{ id: '00000000-0000-4000-8000-000000000030' }] })
+        return
+      }
+    }
+    if (url.pathname === '/rest/v1/rpc/confirm_qris_payment') {
+      qrisConfirmCalls += 1
+      if (options.autoConfirmNotification) {
+        await route.fulfill({ headers, json: { status: 'paid' } })
+        return
+      }
+    }
     if (url.pathname === '/rest/v1/rpc/process_inventory_transaction') inventoryTransactionCalls += 1
     await route.fulfill({ status: 400, headers, json: { message: `Unexpected request: ${method} ${url.pathname}` } })
   })
@@ -89,6 +102,58 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
       await expect(page.getByText('Cabang QRIS').first()).toBeVisible()
     },
   }
+}
+
+async function mockAndroidPaymentSpeech(page: Page) {
+  await page.addInitScript(() => {
+    const paymentNotification = () => ({
+      fingerprint: 'a'.repeat(64),
+      amount: 15000,
+      sourcePackage: 'com.gojek.gopaymerchant',
+      notificationAt: Date.now(),
+      paymentSuccess: true,
+    })
+    const deliveredNotifications: Array<{ id: number }> = []
+    const pluginHeaders = ['ABAppUpdate', 'ABQrisNotification', 'ABScreenBrightness', 'ABPaymentSpeech', 'LocalNotifications']
+      .map(name => ({ name, methods: [
+        { name: 'addListener', rtype: 'callback' },
+        { name: 'removeListener', rtype: 'promise' },
+        ...({
+          ABAppUpdate: ['getAppInfo', 'canInstallPackages', 'requestInstallPermission', 'downloadAndInstall', 'exitApp'],
+          ABQrisNotification: ['checkAccess', 'openSettings', 'getPendingNotifications', 'consumeNotification'],
+          ABScreenBrightness: ['maximize', 'restore'],
+          ABPaymentSpeech: ['speak'],
+          LocalNotifications: ['checkPermissions', 'requestPermissions', 'areEnabled', 'createChannel', 'registerActionTypes', 'listChannels', 'schedule', 'getDeliveredNotifications', 'cancel', 'removeDeliveredNotificationsById'],
+        } as Record<string, string[]>)[name].map(method => ({ name: method, rtype: 'promise' })),
+      ] }))
+
+    const nativePromise = (plugin: string, method: string, options: { notifications?: Array<{ id: number }> } = {}) => {
+      ;(window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { text?: string } }> }).nativeCalls.push({ plugin, method, options })
+      if (plugin === 'ABAppUpdate' && method === 'getAppInfo') return Promise.resolve({ versionName: '1.2.7', versionCode: 11 })
+      if (plugin === 'ABAppUpdate' && method === 'canInstallPackages') return Promise.resolve({ granted: true })
+      if (plugin === 'ABQrisNotification' && method === 'checkAccess') return Promise.resolve({ enabled: true })
+      if (plugin === 'ABQrisNotification' && method === 'getPendingNotifications') return Promise.resolve({ notifications: [paymentNotification()] })
+      if (plugin === 'LocalNotifications' && method === 'checkPermissions') return Promise.resolve({ display: 'granted' })
+      if (plugin === 'LocalNotifications' && method === 'requestPermissions') return Promise.resolve({ display: 'granted' })
+      if (plugin === 'LocalNotifications' && method === 'areEnabled') return Promise.resolve({ value: true })
+      if (plugin === 'LocalNotifications' && method === 'listChannels') return Promise.resolve({ channels: [] })
+      if (plugin === 'LocalNotifications' && method === 'schedule') {
+        deliveredNotifications.push(...(options.notifications ?? []))
+        return Promise.resolve({ notifications: options.notifications ?? [] })
+      }
+      if (plugin === 'LocalNotifications' && method === 'getDeliveredNotifications') return Promise.resolve({ notifications: deliveredNotifications })
+      return Promise.resolve({})
+    }
+    Object.assign(window, {
+      nativeCalls: [] as Array<{ plugin: string; method: string; options?: { text?: string } }>,
+      androidBridge: {},
+      Capacitor: {
+        PluginHeaders: pluginHeaders,
+        nativePromise,
+        nativeCallback: (_plugin: string, _method: string, _options: unknown) => Promise.resolve(`listener-${Date.now()}`),
+      },
+    })
+  })
 }
 
 test('QRIS checkout shows the server-provided merchant name without confirming payment', async ({ page }) => {
@@ -143,6 +208,25 @@ test('QRIS checkout accepts the existing server response shape and still checks 
   await expect(page.getByRole('heading', { name: 'QRIS pembayaran' })).toHaveCount(0)
   expect(mismatchedMock.qrisConfirmCalls()).toBe(0)
   expect(mismatchedMock.inventoryTransactionCalls()).toBe(0)
+})
+
+test('successful GoPay notification speaks the confirmed QRIS amount on Android', async ({ page }) => {
+  await mockAndroidPaymentSpeech(page)
+  const mock = await mockSignedInSupabase(page, 'owner', { qris: true, autoConfirmNotification: true })
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await mock.signIn()
+
+  await page.getByRole('button', { name: 'Scan', exact: true }).click()
+  await page.getByLabel('Input barcode manual').fill('987')
+  await page.getByRole('button', { name: 'Cari barcode' }).click()
+  await page.getByRole('button', { name: 'Proses', exact: true }).click()
+  await page.getByRole('button', { name: /^QRIS/ }).click()
+
+  await expect.poll(async () => page.evaluate(() =>
+    (window as Window & { nativeCalls: Array<{ plugin: string; method: string; options?: { text?: string } }> }).nativeCalls
+      .find(call => call.plugin === 'ABPaymentSpeech' && call.method === 'speak')?.options?.text,
+  )).toBe('Pembayaran QRIS berhasil diterima sebesar lima belas ribu rupiah.')
+  expect(mock.qrisConfirmCalls()).toBe(1)
 })
 
 test('owner can invite a manager by email and cashier is limited to outgoing scanner and QRIS history', async ({ page }) => {
