@@ -38,6 +38,10 @@ export const routes = {
   shopping: '/belanja.html',
   updates: '/pembaruan.html',
   settings: '/pengaturan.html',
+  settingsAppUpdate: '/pengaturan/update-aplikasi.html',
+  settingsQrisVoice: '/pengaturan/suara-qris.html',
+  settingsQris: '/pengaturan/qris.html',
+  settingsPrinter: '/pengaturan/printer.html',
   logsInput: '/logsinput.html',
   profile: '/profilsetting.html',
 }

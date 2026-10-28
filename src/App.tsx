@@ -19,6 +19,7 @@ const loadHistoryPage = () => import('@/pages/history-page')
 const loadQrisHistoryPage = () => import('@/pages/qris-history-page')
 const loadReportsHubPage = () => import('@/pages/reports-hub-page')
 const loadSettingsPage = () => import('@/pages/settings-with-guide-page')
+const loadSettingsDetailPages = () => import('@/pages/settings-detail-pages')
 const loadLogsInputPage = () => import('@/pages/logs-input-page')
 const loadProfileSettingsPage = () => import('@/pages/profile-settings-page')
 const loadReportPages = () => import('@/pages/report-pages')
@@ -32,6 +33,10 @@ const HistoryPage = lazy(() => loadHistoryPage().then((module) => ({ default: mo
 const QrisHistoryPage = lazy(() => loadQrisHistoryPage().then((module) => ({ default: module.QrisHistoryPage })))
 const ReportsHubPage = lazy(() => loadReportsHubPage().then((module) => ({ default: module.ReportsHubPage })))
 const SettingsPage = lazy(() => loadSettingsPage().then((module) => ({ default: module.SettingsWithGuidePage })))
+const AppUpdateSettingsPage = lazy(() => loadSettingsDetailPages().then((module) => ({ default: module.AppUpdateSettingsPage })))
+const QrisVoiceSettingsPage = lazy(() => loadSettingsDetailPages().then((module) => ({ default: module.QrisVoiceSettingsPage })))
+const QrisSettingsPage = lazy(() => loadSettingsDetailPages().then((module) => ({ default: module.QrisSettingsPage })))
+const PrinterSettingsPage = lazy(() => loadSettingsDetailPages().then((module) => ({ default: module.PrinterSettingsPage })))
 const LogsInputPage = lazy(() => loadLogsInputPage().then((module) => ({ default: module.LogsInputPage })))
 const ProfileSettingsPage = lazy(() => loadProfileSettingsPage().then((module) => ({ default: module.ProfileSettingsPage })))
 const IncomingReportPage = lazy(() => loadReportPages().then((module) => ({ default: module.IncomingReportPage })))
@@ -109,6 +114,10 @@ function App() {
                   <Route path={routes.shopping} element={<ShoppingPage />} />
                   <Route path={routes.updates} element={<UpdateHistoryPage />} />
                   <Route path={routes.settings} element={<SettingsPage />} />
+                  <Route path={routes.settingsAppUpdate} element={<AppUpdateSettingsPage />} />
+                  <Route path={routes.settingsQrisVoice} element={<QrisVoiceSettingsPage />} />
+                  <Route path={routes.settingsQris} element={<QrisSettingsPage />} />
+                  <Route path={routes.settingsPrinter} element={<PrinterSettingsPage />} />
                   <Route path={routes.logsInput} element={<LogsInputPage />} />
                   <Route path={routes.profile} element={<ProfileSettingsPage />} />
                   <Route path="*" element={<Navigate to={routes.dashboard} replace />} />

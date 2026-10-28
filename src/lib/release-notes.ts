@@ -9,6 +9,7 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const CURRENT_RELEASE_SUMMARY = [
   'Konfirmasi QRIS dibacakan sebagai audio aplikasi dengan pilihan suara perempuan atau pria dan contoh pemutaran.',
   'Menu Update Aplikasi memeriksa APK terbaru di GitHub Releases dan memasang versi baru tanpa menghapus data.',
+  'Menu Update Aplikasi, suara QRIS, QRIS dasar, dan printer kini terbuka di halaman masing-masing.',
   'Pembayaran QRIS memakai nominal sesuai total keranjang; kasir mengonfirmasi setelah mengecek dana di GoBiz.',
   'Riwayat QRIS ada di menu Laporan, setelah Belanja, dengan pencarian nominal/tanggal, rentang tanggal, dan pengurutan.',
   'Pengaturan gambar QRIS dipindah ke bagian paling bawah halaman Pengaturan.',

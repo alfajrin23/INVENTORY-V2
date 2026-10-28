@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 import { InteractiveGuide } from '@/components/guide/interactive-guide'
-import { PrinterSettingsPanel } from '@/components/printer/printer-settings-panel'
 import { AppGuideDialog } from '@/components/settings/app-guide-dialog'
 import { GlassPanel } from '@/components/shared/glass-panel'
 import { routes } from '@/lib/navigation'
@@ -32,7 +31,6 @@ export function SettingsWithGuidePage() {
   return (
     <div className="space-y-5">
       <SettingsPage />
-      <PrinterSettingsPanel />
 
       <Link
         to={routes.updates}

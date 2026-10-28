@@ -65,7 +65,7 @@ test('release notes appears once per installed version and appears again when ve
   const whatsNew = page.getByRole('dialog').filter({ hasText: 'Yang Baru di Inventory V2' })
   await expect(whatsNew).toBeVisible()
   await whatsNew.getByRole('button', { name: 'Mengerti' }).click()
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab:last-seen-release-notes-version:v1'))).toBe('1.2.8')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ab:last-seen-release-notes-version:v1'))).toBe('1.2.9')
 
   await page.reload()
   await page.waitForTimeout(1200)
@@ -105,6 +105,7 @@ test('revenue period buttons never overlap from 320px through desktop', async ({
 
 async function mockShoppingAndroid(page: Page) {
   await page.route('https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=10', route => route.fulfill({ status: 200, json: [] }))
+  await page.route('https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=20', route => route.fulfill({ status: 200, json: [] }))
   await page.addInitScript(() => {
     localStorage.setItem('ab:last-seen-release-notes-version:v1', '1.2.0')
     const calls: Array<{ plugin: string; method: string; options?: Record<string, unknown> }> = []

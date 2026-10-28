@@ -1,10 +1,8 @@
-import { Bell, ChevronRight, Database, Download, History, Image, Info, LogOut, MessageCircle, Moon, QrCode, Save, ScrollText, ShieldCheck, Store, Sun, Upload, UserCog, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Bell, ChevronRight, Database, Download, History, Info, LogOut, MessageCircle, Moon, Printer, QrCode, Save, ScrollText, ShieldCheck, Store, Sun, UserCog, Volume2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 
 import { GlassPanel } from '@/components/shared/glass-panel'
-import { AppUpdateSettings } from '@/components/settings/app-update-settings'
-import { QrisVoiceSettings } from '@/components/settings/qris-voice-settings'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,8 +18,6 @@ import { useThemeMode } from '@/hooks/use-theme-mode'
 import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { routes } from '@/lib/navigation'
-import { fetchQrisImage, uploadQrisImage } from '@/lib/media-storage'
-import { decodeStaticQrisImage } from '@/lib/qris-image'
 import { demoEnabled, supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -50,38 +46,8 @@ export function SettingsPage() {
   const [accountSaving, setAccountSaving] = useState(false)
   const [accountError, setAccountError] = useState('')
   const [accountNotice, setAccountNotice] = useState('')
-  const [qrisImage, setQrisImage] = useState('/qris-base.jpg')
-  const [qrisUploading, setQrisUploading] = useState(false)
-  const qrisFileInput = useRef<HTMLInputElement>(null)
   const { theme, toggleTheme } = useThemeMode()
   const { showToast } = useToast()
-
-  useEffect(() => {
-    if (!supabase || demoEnabled) return
-    let alive = true
-    void fetchQrisImage().then(url => { if (alive && url) setQrisImage(url) }).catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  const handleQrisImageChange = async (file: File | undefined) => {
-    if (!file) return
-    if (!supabase || demoEnabled) {
-      showToast('Simpan gambar QRIS memerlukan koneksi Supabase aktif.', 'error')
-      return
-    }
-    setQrisUploading(true)
-    try {
-      const decoded = await decodeStaticQrisImage(file)
-      const url = await uploadQrisImage(file, decoded.payload)
-      setQrisImage(url)
-      showToast(`QRIS ${decoded.merchantName} siap membuat nominal dinamis.`, 'success')
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Gambar QRIS gagal disimpan.', 'error')
-    } finally {
-      setQrisUploading(false)
-      if (qrisFileInput.current) qrisFileInput.current.value = ''
-    }
-  }
 
   useEffect(() => {
     if (!accountOpen || !supabase || demoEnabled) return
@@ -260,6 +226,30 @@ export function SettingsPage() {
           </Link>
         </div>
 
+        <p className="mobile-section-eyebrow">FITUR & PERANGKAT</p>
+        <div className="settings-group">
+          <Link to={routes.settingsAppUpdate} className="settings-row">
+            <span className="settings-icon info"><Download /></span>
+            <span><strong>Update aplikasi</strong><small>Periksa dan pasang APK terbaru</small></span>
+            <ChevronRight size={17} />
+          </Link>
+          <Link to={routes.settingsQrisVoice} className="settings-row">
+            <span className="settings-icon info"><Volume2 /></span>
+            <span><strong>Suara konfirmasi QRIS</strong><small>Pilih dan coba suara pembayaran</small></span>
+            <ChevronRight size={17} />
+          </Link>
+          <Link to={routes.settingsQris} className="settings-row">
+            <span className="settings-icon info"><QrCode /></span>
+            <span><strong>Pengaturan QRIS</strong><small>Kelola QRIS dasar untuk transaksi</small></span>
+            <ChevronRight size={17} />
+          </Link>
+          <Link to={routes.settingsPrinter} className="settings-row">
+            <span className="settings-icon incoming"><Printer /></span>
+            <span><strong>Printer thermal</strong><small>Hubungkan printer struk</small></span>
+            <ChevronRight size={17} />
+          </Link>
+        </div>
+
         <p className="mobile-section-eyebrow">AKUN & APLIKASI</p>
         <div className="settings-group">
           <button className="settings-row" onClick={openAccountSettings}>
@@ -270,14 +260,6 @@ export function SettingsPage() {
             </span>
             <ChevronRight size={17} />
           </button>
-          <a href="#app-update" className="settings-row">
-            <span className="settings-icon info"><Download /></span>
-            <span>
-              <strong>Update aplikasi</strong>
-              <small>Selaraskan versi APK dari GitHub</small>
-            </span>
-            <ChevronRight size={17} />
-          </a>
           <Link to={routes.history} className="settings-row">
             <span className="settings-icon incoming"><History /></span>
             <span>
@@ -356,10 +338,28 @@ export function SettingsPage() {
           Pengaturan Akun
         </Button>
         <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
-          <a href="#app-update">
+          <Link to={routes.settingsAppUpdate}>
             <Download className="size-4" />
             Update Aplikasi
-          </a>
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.settingsQrisVoice}>
+            <Volume2 className="size-4" />
+            Suara Konfirmasi QRIS
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.settingsQris}>
+            <QrCode className="size-4" />
+            Pengaturan QRIS
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 justify-start border-white/12 bg-white/[0.07] text-white hover:bg-white/12">
+          <Link to={routes.settingsPrinter}>
+            <Printer className="size-4" />
+            Printer Thermal
+          </Link>
         </Button>
         <Button
           type="button"
@@ -410,25 +410,6 @@ export function SettingsPage() {
         </button>
       </GlassPanel>
       </div>
-
-      <AppUpdateSettings />
-      <QrisVoiceSettings />
-
-      <GlassPanel className="grid gap-4 p-4 sm:grid-cols-[9rem_1fr] sm:items-center" glow="cyan">
-        <div className="flex min-h-32 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white p-2">
-          <img src={qrisImage} alt="Gambar referensi QRIS ABElektronik" className="max-h-44 w-full object-contain" />
-        </div>
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 text-cyan-100"><QrCode className="size-5" /><h2 className="font-semibold">Pengaturan QRIS</h2></div>
-          <p className="text-sm text-white/62">Unggah QRIS statis ABElektronik yang sesuai dengan akun GoBiz. Aplikasi mengisi nominal dan referensi di QR untuk tiap transaksi; kasir tetap harus mengecek pembayaran di GoBiz.</p>
-          <input ref={qrisFileInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={event => void handleQrisImageChange(event.target.files?.[0])} />
-          <Button type="button" variant="outline" disabled={qrisUploading || demoEnabled || !supabase} onClick={() => qrisFileInput.current?.click()}>
-            {qrisUploading ? <Image className="size-4 animate-pulse" /> : <Upload className="size-4" />}
-            {qrisUploading ? 'Menyimpan gambar…' : 'Ganti gambar QRIS'}
-          </Button>
-          {demoEnabled ? <p className="text-xs text-amber-100/70">Mode demo: penyimpanan gambar perlu koneksi Supabase.</p> : null}
-        </div>
-      </GlassPanel>
 
       <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
         <DialogContent className="border-white/12 bg-[#121827]/96 text-white shadow-2xl sm:max-w-lg">

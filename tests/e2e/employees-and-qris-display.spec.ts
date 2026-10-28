@@ -106,6 +106,7 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
 
 async function mockAndroidPaymentSpeech(page: Page) {
   await page.addInitScript(() => {
+    localStorage.setItem('ab:last-seen-release-notes-version:v1', '1.2.8')
     const paymentNotification = () => ({
       fingerprint: 'a'.repeat(64),
       amount: 15000,
@@ -231,7 +232,7 @@ test('successful GoPay notification speaks the confirmed QRIS amount on Android'
 
 test('new GitHub APK triggers the update popup and can be downloaded from Settings', async ({ page }) => {
   await mockAndroidPaymentSpeech(page)
-  const mock = await mockSignedInSupabase(page, 'owner')
+  await mockSignedInSupabase(page, 'owner')
   const apkUrl = 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.9/ABElektronik-Inventory.apk'
   await page.route('https://api.github.com/**', async route => {
     await route.fulfill({
@@ -276,6 +277,7 @@ test('QRIS voice profile can be selected and previewed from Settings', async ({ 
   await mock.signIn()
   await page.goto('/pengaturan.html')
 
+  await page.getByRole('link', { name: /Suara konfirmasi QRIS/i }).click()
   await page.getByRole('button', { name: /Perempuan formal/ }).click()
   await page.getByRole('button', { name: 'Putar contoh suara' }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Terpilih: Perempuan formal' })).toBeVisible()
@@ -286,6 +288,32 @@ test('QRIS voice profile can be selected and previewed from Settings', async ({ 
     profile: 'female_formal',
     text: 'Pembayaran Berhasil Melalui QRIS sebesar seratus lima puluh ribu rupiah.',
   })
+})
+
+test('settings features open separate pages from the settings menu', async ({ page }) => {
+  const mock = await mockSignedInSupabase(page, 'owner')
+  await mock.signIn()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/pengaturan.html')
+
+  await expect(page.getByRole('heading', { name: 'Update Aplikasi', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Suara Konfirmasi QRIS', exact: true })).toHaveCount(0)
+
+  const backToSettings = () => page.getByRole('link', { name: 'Kembali ke Pengaturan' })
+  await page.getByRole('link', { name: /Update aplikasi/i }).click()
+  await expect(page.getByRole('heading', { name: 'Update Aplikasi', exact: true }).first()).toBeVisible()
+  await backToSettings().click()
+
+  await page.getByRole('link', { name: /Suara konfirmasi QRIS/i }).click()
+  await expect(page.getByRole('heading', { name: 'Suara Konfirmasi QRIS', exact: true }).first()).toBeVisible()
+  await backToSettings().click()
+
+  await page.getByRole('link', { name: 'Pengaturan QRIS' }).click()
+  await expect(page.getByRole('heading', { name: 'Pengaturan QRIS', exact: true }).first()).toBeVisible()
+  await backToSettings().click()
+
+  await page.getByRole('link', { name: 'Printer thermal' }).click()
+  await expect(page.getByRole('heading', { name: 'Printer Thermal', exact: true }).first()).toBeVisible()
 })
 
 test('owner can invite a manager by email and cashier is limited to outgoing scanner and QRIS history', async ({ page }) => {
