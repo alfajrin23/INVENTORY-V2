@@ -105,6 +105,14 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
 }
 
 async function mockAndroidPaymentSpeech(page: Page) {
+  await page.route('https://raw.githubusercontent.com/alfajrin23/INVENTORY-V2/feat/qris-dynamic-midtrans/public/app-update.json**', route => route.fulfill({
+    status: 200,
+    json: {
+      version: '1.2.8',
+      title: 'ABElektronik Inventory 1.2.8',
+      apkUrl: 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.8/ABElektronik-Inventory.apk',
+    },
+  }))
   await page.addInitScript(() => {
     localStorage.setItem('ab:last-seen-release-notes-version:v1', '1.2.8')
     const paymentNotification = () => ({
@@ -233,22 +241,26 @@ test('successful GoPay notification speaks the confirmed QRIS amount on Android'
 test('new GitHub APK triggers the update popup and can be downloaded from Settings', async ({ page }) => {
   await mockAndroidPaymentSpeech(page)
   await mockSignedInSupabase(page, 'owner')
-  const apkUrl = 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.9/ABElektronik-Inventory.apk'
+  const apkUrl = 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.10/ABElektronik-Inventory.apk'
   await page.route('https://api.github.com/**', async route => {
     await route.fulfill({
-      headers: { 'content-type': 'application/json' },
-      json: [{
-        draft: false,
-        prerelease: false,
-        tag_name: 'v1.2.9',
-        name: 'ABElektronik Inventory 1.2.9',
-        body: 'Update menu Pengaturan dan pilihan suara konfirmasi QRIS.',
-        published_at: new Date().toISOString(),
-        html_url: 'https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.9',
-        assets: [{ name: 'ABElektronik-Inventory.apk', browser_download_url: apkUrl }],
-      }],
+      status: 403,
+      headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+      json: { message: 'API rate limit exceeded' },
     })
   })
+  await page.route('https://raw.githubusercontent.com/alfajrin23/INVENTORY-V2/feat/qris-dynamic-midtrans/public/app-update.json**', route => route.fulfill({
+    status: 200,
+    headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+    json: {
+      version: '1.2.10',
+      title: 'ABElektronik Inventory 1.2.10',
+      body: 'Pemeriksaan update memakai manifest publik. Volume media QRIS dipulihkan setelah suara selesai.',
+      apkUrl,
+      releaseUrl: 'https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.10',
+      publishedAt: new Date().toISOString(),
+    },
+  }))
   await page.goto('/')
   await page.getByLabel('Email', { exact: true }).fill('owner@example.test')
   await page.getByLabel('Password', { exact: true }).fill('test-password')
@@ -262,7 +274,7 @@ test('new GitHub APK triggers the update popup and can be downloaded from Settin
   await page.goto('/pengaturan.html')
   await page.getByRole('link', { name: /Update aplikasi/i }).click()
   await page.getByRole('button', { name: 'Cek versi terbaru' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Versi 1.2.9 tersedia' })).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Versi 1.2.10 tersedia' })).toBeVisible()
   await page.getByRole('button', { name: 'Download asset & update' }).click()
 
   await expect.poll(async () => page.evaluate(() =>

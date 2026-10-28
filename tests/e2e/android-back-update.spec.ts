@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
 const releasesPattern = 'https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=10'
+const updateFeedPattern = 'https://raw.githubusercontent.com/alfajrin23/INVENTORY-V2/feat/qris-dynamic-midtrans/public/app-update.json**'
 
 type NativeCall = { plugin: string; method: string; options?: Record<string, unknown> }
 
@@ -9,11 +10,21 @@ type BackAwareWindow = typeof window & {
   nativeCalls: NativeCall[]
 }
 
-async function mockAndroid(page: Page, releases: unknown[] = []) {
+async function mockAndroid(page: Page, update?: Record<string, unknown>) {
   await page.route(releasesPattern, route => route.fulfill({
     status: 200,
     contentType: 'application/json',
-    body: JSON.stringify(releases),
+    body: JSON.stringify([]),
+  }))
+  await page.route(updateFeedPattern, route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(update ?? {
+      version: '1.2.0',
+      title: 'ABElektronik Inventory 1.2.0',
+      apkUrl: 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.0/ABElektronik-Inventory.apk',
+      releaseUrl: 'https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.0',
+    }),
   }))
 
   await page.addInitScript(() => {
@@ -92,23 +103,16 @@ test('Android app exits only after two back presses on the dashboard', async ({ 
     .filter(call => call.plugin === 'ABAppUpdate' && call.method === 'exitApp').length)).toBe(1)
 })
 
-test('Android updater popup downloads the newer GitHub Release through the native plugin', async ({ page }) => {
-  await mockAndroid(page, [
-    {
-      draft: false,
-      prerelease: false,
-      tag_name: 'v1.3.0',
-      name: 'ABElektronik Inventory 1.3.0',
-      body: 'Perbaikan dan fitur baru.',
-      published_at: '2026-09-15T07:00:00Z',
-      assets: [
-        {
-          name: 'ABElektronik-Inventory.apk',
-          browser_download_url: 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.3.0/ABElektronik-Inventory.apk',
-        },
-      ],
-    },
-  ])
+test('Android updater popup downloads a newer APK from the public update feed', async ({ page }) => {
+  const apkUrl = 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.3.0/ABElektronik-Inventory.apk'
+  await mockAndroid(page, {
+    version: '1.3.0',
+    title: 'ABElektronik Inventory 1.3.0',
+    body: 'Perbaikan dan fitur baru.',
+    apkUrl,
+    releaseUrl: 'https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.3.0',
+    publishedAt: '2026-09-15T07:00:00Z',
+  })
 
   await page.goto('/')
   const updateDialog = page.getByRole('dialog')

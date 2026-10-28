@@ -1,0 +1,8 @@
+{
+  "version": "1.2.9",
+  "title": "ABElektronik Inventory 1.2.9",
+  "body": "Menu Pengaturan kini membuka halaman terpisah untuk Update Aplikasi, suara QRIS, pengaturan QRIS, dan printer thermal. APK dapat dipasang sebagai pembaruan di atas aplikasi lama tanpa menghapus data.",
+  "apkUrl": "https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.9/ABElektronik-Inventory.apk",
+  "releaseUrl": "https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.9",
+  "publishedAt": "2026-10-28T06:25:00Z"
+}

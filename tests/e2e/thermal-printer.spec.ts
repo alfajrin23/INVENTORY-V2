@@ -14,6 +14,14 @@ type MockConfig = {
 
 async function mockThermalAndroid(page: Page, config: MockConfig) {
   await page.route('https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=10', route => route.fulfill({ status: 200, json: [] }))
+  await page.route('https://raw.githubusercontent.com/alfajrin23/INVENTORY-V2/feat/qris-dynamic-midtrans/public/app-update.json**', route => route.fulfill({
+    status: 200,
+    json: {
+      version: '1.2.0',
+      title: 'ABElektronik Inventory 1.2.0',
+      apkUrl: 'https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.0/ABElektronik-Inventory.apk',
+    },
+  }))
   await page.addInitScript(initial => {
     localStorage.setItem('ab:last-seen-release-notes-version:v1', '1.2.0')
     const device = { name: 'XANTRI BT-58D PRO', address: '11:22:33:44:55:66', bonded: true }

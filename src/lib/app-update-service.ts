@@ -1,26 +1,11 @@
 import { fallbackReleaseSummary, summarizeReleaseBody } from '@/lib/release-notes'
 
-const RELEASES_URL = 'https://api.github.com/repos/alfajrin23/INVENTORY-V2/releases?per_page=20'
+const UPDATE_FEED_URL = 'https://raw.githubusercontent.com/alfajrin23/INVENTORY-V2/feat/qris-dynamic-midtrans/public/app-update.json'
+const UPDATE_FEED_CACHE_KEY = 'ab:app-update-feed-cache:v1'
 
 export const UPDATE_CHECK_KEY = 'ab:last-update-check-at'
 export const UPDATE_DISMISSED_KEY = 'ab:last-update-dismissed-version'
 export const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000
-
-type GitHubAsset = {
-  name: string
-  browser_download_url: string
-}
-
-type GitHubRelease = {
-  draft: boolean
-  prerelease: boolean
-  tag_name: string
-  name: string | null
-  body: string | null
-  published_at: string | null
-  html_url: string
-  assets: GitHubAsset[]
-}
 
 export type AvailableUpdate = {
   version: string
@@ -39,6 +24,16 @@ export type AppUpdateCheck = {
 type ParsedVersion = {
   core: number[]
   prerelease: Array<number | string> | null
+}
+
+type AppUpdateManifest = {
+  version?: unknown
+  title?: unknown
+  body?: unknown
+  notes?: unknown
+  apkUrl?: unknown
+  releaseUrl?: unknown
+  publishedAt?: unknown
 }
 
 function parseVersion(value: string): ParsedVersion | null {
@@ -87,35 +82,78 @@ export function compareAppVersions(left: string, right: string) {
   return 0
 }
 
+function isReleaseAssetUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:'
+      && url.hostname === 'github.com'
+      && url.pathname.startsWith('/alfajrin23/INVENTORY-V2/releases/download/')
+      && url.pathname.toLowerCase().endsWith('/abelektronik-inventory.apk')
+  } catch {
+    return false
+  }
+}
+
+function parseUpdateManifest(value: unknown): AvailableUpdate | null {
+  if (!value || typeof value !== 'object') return null
+  const manifest = value as AppUpdateManifest
+  const version = typeof manifest.version === 'string' ? manifest.version.trim().replace(/^v/i, '') : ''
+  const apkUrl = typeof manifest.apkUrl === 'string' ? manifest.apkUrl.trim() : ''
+  if (!parseVersion(version) || !isReleaseAssetUrl(apkUrl)) return null
+
+  const notes = Array.isArray(manifest.notes)
+    ? manifest.notes.filter((note): note is string => typeof note === 'string' && Boolean(note.trim())).slice(0, 8)
+    : summarizeReleaseBody(typeof manifest.body === 'string' ? manifest.body : '')
+  const releaseUrl = typeof manifest.releaseUrl === 'string'
+    && manifest.releaseUrl.startsWith('https://github.com/alfajrin23/INVENTORY-V2/releases/tag/')
+    ? manifest.releaseUrl
+    : `https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v${version}`
+
+  return {
+    version,
+    title: typeof manifest.title === 'string' && manifest.title.trim() ? manifest.title.trim() : `Versi ${version}`,
+    notes: notes.length ? notes : fallbackReleaseSummary(),
+    apkUrl,
+    releaseUrl,
+    publishedAt: typeof manifest.publishedAt === 'string' ? manifest.publishedAt : null,
+  }
+}
+
+function readCachedUpdate(): AvailableUpdate | null {
+  try {
+    const raw = localStorage.getItem(UPDATE_FEED_CACHE_KEY)
+    return raw ? parseUpdateManifest(JSON.parse(raw)) : null
+  } catch {
+    return null
+  }
+}
+
+function writeCachedUpdate(update: AvailableUpdate) {
+  try {
+    localStorage.setItem(UPDATE_FEED_CACHE_KEY, JSON.stringify(update))
+  } catch {
+    // The update check remains available when browser storage is full or disabled.
+  }
+}
+
 export async function checkAvailableAppUpdate(currentVersion: string): Promise<AppUpdateCheck> {
-  const response = await fetch(RELEASES_URL, {
-    headers: { Accept: 'application/vnd.github+json' },
-    cache: 'no-store',
-  })
-  if (!response.ok) throw new Error(`Pemeriksaan GitHub gagal (${response.status}).`)
+  let latestRelease: AvailableUpdate | null = null
 
-  const releases = await response.json() as GitHubRelease[]
-  const candidates = releases
-    .filter(release => !release.draft && release.tag_name)
-    .map((release): AvailableUpdate | null => {
-      const apk = release.assets.find(asset => asset.name.toLowerCase() === 'abelektronik-inventory.apk')
-      if (!apk) return null
-      const version = release.tag_name.replace(/^v/i, '')
-      if (!parseVersion(version)) return null
-      const releaseNotes = summarizeReleaseBody(release.body)
-      return {
-        version,
-        title: release.name?.trim() || `Versi ${version}`,
-        notes: releaseNotes.length ? releaseNotes : fallbackReleaseSummary(),
-        apkUrl: apk.browser_download_url,
-        releaseUrl: release.html_url,
-        publishedAt: release.published_at,
-      }
+  try {
+    const response = await fetch(`${UPDATE_FEED_URL}?t=${Date.now()}`, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
     })
-    .filter((release): release is AvailableUpdate => Boolean(release))
-    .sort((left, right) => compareAppVersions(right.version, left.version))
+    if (!response.ok) throw new Error(`Pemeriksaan feed update gagal (${response.status}).`)
 
-  const latestRelease = candidates[0] ?? null
-  const update = candidates.find(release => compareAppVersions(release.version, currentVersion) > 0) ?? null
+    latestRelease = parseUpdateManifest(await response.json())
+    if (!latestRelease) throw new Error('Manifest APK GitHub tidak valid.')
+    writeCachedUpdate(latestRelease)
+  } catch (error) {
+    latestRelease = readCachedUpdate()
+    if (!latestRelease) throw error
+  }
+
+  const update = compareAppVersions(latestRelease.version, currentVersion) > 0 ? latestRelease : null
   return { latestRelease, update }
 }

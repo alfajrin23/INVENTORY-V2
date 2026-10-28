@@ -1,6 +1,6 @@
 # Android In-App Update Setup
 
-Aplikasi mengecek GitHub Releases `alfajrin23/INVENTORY-V2`, menampilkan popup jika ada versi APK yang lebih baru, mengunduh APK dari dalam aplikasi, lalu membuka installer Android.
+Aplikasi mengecek manifest publik `public/app-update.json` dari branch `feat/qris-dynamic-midtrans`, menampilkan popup jika ada versi APK yang lebih baru, mengunduh APK dari dalam aplikasi, lalu membuka installer Android. Manifest statis menghindari batas kuota GitHub Releases API.
 
 ## Syarat utama: signing certificate harus tetap sama
 
@@ -54,7 +54,8 @@ Workflow `.github/workflows/android-release.yml` akan:
 - memberi `versionCode` yang terus naik,
 - membuat SHA-256,
 - membuat GitHub Release,
-- mengunggah `ABElektronik-Inventory.apk`.
+- mengunggah `ABElektronik-Inventory.apk`,
+- memperbarui `public/app-update.json` pada branch feed setelah APK release berhasil diterbitkan.
 
 Aplikasi Android mengecek release tersebut otomatis. Release beta seperti `v1.2.1-beta.1` juga didukung.
 

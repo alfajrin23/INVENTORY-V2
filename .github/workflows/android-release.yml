@@ -7,9 +7,15 @@ on:
       - feat/qris-dynamic-midtrans
     tags:
       - 'v*'
+    paths-ignore:
+      - 'public/app-update.json'
 
 permissions:
   contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
 
 jobs:
   build-release:
@@ -105,3 +111,36 @@ jobs:
               --notes "APK update otomatis dari commit $GITHUB_SHA pada branch $GITHUB_REF_NAME." \
               --prerelease
           fi
+
+      - name: Publish app update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_FEED_BRANCH: feat/qris-dynamic-midtrans
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          else
+            RELEASE_TAG="v$AB_VERSION_NAME"
+          fi
+          RELEASE_DATA=$(gh release view "$RELEASE_TAG" --json name,body,publishedAt)
+          APK_URL="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/ABElektronik-Inventory.apk"
+          RELEASE_URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
+
+          git fetch origin "$UPDATE_FEED_BRANCH"
+          git checkout -B "$UPDATE_FEED_BRANCH" "origin/$UPDATE_FEED_BRANCH"
+          mkdir -p public
+          printf '%s' "$RELEASE_DATA" | jq \
+            --arg version "$AB_VERSION_NAME" \
+            --arg apkUrl "$APK_URL" \
+            --arg releaseUrl "$RELEASE_URL" \
+            '{version:$version,title:(.name // ("ABElektronik Inventory " + $version)),body:(.body // ""),apkUrl:$apkUrl,releaseUrl:$releaseUrl,publishedAt:.publishedAt}' \
+            > public/app-update.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/app-update.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: update Android APK feed for $RELEASE_TAG"
+          git push origin "HEAD:refs/heads/$UPDATE_FEED_BRANCH"
