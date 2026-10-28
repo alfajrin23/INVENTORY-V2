@@ -18,6 +18,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ABThermalPrinterPlugin.class);
         registerPlugin(ABScreenBrightnessPlugin.class);
         registerPlugin(ABQrisNotificationPlugin.class);
+        registerPlugin(ABPaymentSpeechPlugin.class);
         super.onCreate(savedInstanceState);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {

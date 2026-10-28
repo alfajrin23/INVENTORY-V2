@@ -7,6 +7,7 @@ const CACHE_KEY = 'ab:release-notes-cache:v1'
 export const LAST_SEEN_RELEASE_NOTES_KEY = 'ab:last-seen-release-notes-version:v1'
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const CURRENT_RELEASE_SUMMARY = [
+  'Konfirmasi QRIS berhasil kini diumumkan dengan suara beserta nominal yang diterima.',
   'Pembayaran QRIS memakai nominal sesuai total keranjang; kasir mengonfirmasi setelah mengecek dana di GoBiz.',
   'Riwayat QRIS ada di menu Laporan, setelah Belanja, dengan pencarian nominal/tanggal, rentang tanggal, dan pengurutan.',
   'Pengaturan gambar QRIS dipindah ke bagian paling bawah halaman Pengaturan.',

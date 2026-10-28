@@ -37,6 +37,7 @@ import { useInventory } from '@/hooks/use-inventory'
 import { useToast } from '@/hooks/use-toast'
 import { prepareInventoryNotification, showQrisPaymentNotification } from '@/lib/android-notifications'
 import { dateTimeLabel, formatCurrency } from '@/lib/format'
+import { speakQrisPaymentReceived } from '@/lib/qris-speech'
 import { demoEnabled, supabase } from '@/lib/supabase'
 import { maximizeQrBrightness, restoreQrBrightness } from '@/lib/screen-brightness'
 import { routes } from '@/lib/navigation'
@@ -121,6 +122,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
   const submitLock = useRef(false)
   const completedPayment = useRef('')
   const notifiedPayment = useRef('')
+  const spokenPayment = useRef('')
   const qrisConfirmationLock = useRef(false)
   const handledNotificationFingerprints = useRef(new Set<string>())
   const deferredNotificationPayments = useRef(new Map<string, string>())
@@ -298,10 +300,17 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
     }
   }
 
-  const completeQrisPayment = useCallback(async (paymentId: string) => {
+  const announceQrisPayment = useCallback((paymentId: string, amount: number) => {
+    if (spokenPayment.current === paymentId || !Capacitor.isNativePlatform()) return
+    spokenPayment.current = paymentId
+    void speakQrisPaymentReceived(amount).catch(() => undefined)
+  }, [])
+
+  const completeQrisPayment = useCallback(async (paymentId: string, receivedAmount?: number) => {
     if (completedPayment.current === paymentId || !activeStore) return
     completedPayment.current = paymentId
     setQrisPaymentStatus('paid')
+    announceQrisPayment(paymentId, receivedAmount ?? qrisPayment?.amount ?? total)
     setLastItems(qrisItems)
     setLastCategory('keluar')
     setItems([])
@@ -316,7 +325,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       void showQrisPaymentNotification(activeStore.name, formatCurrency(qrisPayment?.amount ?? total))
         .catch(() => showToast('Pembayaran tercatat. Izin notifikasi perangkat perlu diperiksa.', 'info'))
     }
-  }, [activeStore, qrisItems, qrisPayment?.amount, refresh, showToast, total])
+  }, [activeStore, announceQrisPayment, qrisItems, qrisPayment?.amount, refresh, showToast, total])
 
   const confirmQrisPayment = useCallback(async (notification?: MerchantPaymentNotification) => {
     const client = supabase
@@ -336,11 +345,12 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       const result = data as { status?: QrisPaymentStatus; message?: string } | null
       if (result?.status === 'paid') {
         setQrisPaymentStatus('paid')
-        await completeQrisPayment(qrisPayment.id)
+        await completeQrisPayment(qrisPayment.id, notification?.amount ?? qrisPayment.amount)
         if (notification) showToast(`Notifikasi GoPay cocok dengan ${formatCurrency(notification.amount)} dan satu QRIS aktif. Pembayaran dikonfirmasi.`, 'success')
         return true
       } else if (result?.status === 'inventory_error') {
         setQrisPaymentStatus('inventory_error')
+        announceQrisPayment(qrisPayment.id, notification?.amount ?? qrisPayment.amount)
         setQrisFailure(result.message ?? 'Dana diterima, tetapi stok perlu ditinjau admin.')
         showToast('Dana dikonfirmasi, tetapi stok perlu ditinjau admin.', 'error')
         if (notifiedPayment.current !== qrisPayment.id && activeStore && Capacitor.isNativePlatform()) {
@@ -358,7 +368,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       qrisConfirmationLock.current = false
       setQrisConfirming(false)
     }
-  }, [activeStore, completeQrisPayment, qrisPayment, showToast])
+  }, [activeStore, announceQrisPayment, completeQrisPayment, qrisPayment, showToast])
 
   const handleConfirmQrisPayment = () => { void confirmQrisPayment() }
 
@@ -527,6 +537,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       setQrisFailure(data.failure_reason ?? '')
       if (status === 'paid') await completeQrisPayment(qrisPayment.id)
       if (status === 'inventory_error') {
+        announceQrisPayment(qrisPayment.id, qrisPayment.amount)
         showToast('Dana QRIS dikonfirmasi, tetapi stok perlu ditinjau admin.', 'error')
         if (notifiedPayment.current !== qrisPayment.id && activeStore && Capacitor.isNativePlatform()) {
           notifiedPayment.current = qrisPayment.id
@@ -546,7 +557,7 @@ export function TransactionWorkflow({ scannerOpen, onScannerOpenChange, voiceOpe
       window.clearInterval(poll)
       void client.removeChannel(channel)
     }
-  }, [qrisPayment, qrisPaymentStatus, completeQrisPayment, showToast, activeStore])
+  }, [qrisPayment, qrisPaymentStatus, announceQrisPayment, completeQrisPayment, showToast, activeStore])
 
   const handleMissingBarcode = (barcode: string) => {
     sessionStorage.setItem('pendingBarcode', barcode)
