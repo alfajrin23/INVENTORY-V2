@@ -1,8 +1,8 @@
 {
-  "version": "1.2.10",
-  "title": "ABElektronik Inventory 1.2.10",
-  "body": "Pemeriksaan update memakai manifest publik untuk menghindari batas kuota GitHub API. Volume media dinaikkan sementara selama suara konfirmasi QRIS lalu dipulihkan. Menu Pengaturan tetap menyediakan halaman terpisah.",
-  "apkUrl": "https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.10/ABElektronik-Inventory.apk",
-  "releaseUrl": "https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.10",
-  "publishedAt": "2026-10-28T07:09:51Z"
+    "version":  "1.2.11",
+    "title":  "ABElektronik Inventory 1.2.11",
+    "body":  "Perbaikan hak pemilik untuk menambah toko cabang. Tampilan Cabang \u0026 Karyawan diperbarui agar lebih rapi dan mudah digunakan.",
+    "apkUrl":  "https://github.com/alfajrin23/INVENTORY-V2/releases/download/v1.2.11/ABElektronik-Inventory.apk",
+    "releaseUrl":  "https://github.com/alfajrin23/INVENTORY-V2/releases/tag/v1.2.11",
+    "publishedAt":  "2026-11-03T06:58:28Z"
 }
