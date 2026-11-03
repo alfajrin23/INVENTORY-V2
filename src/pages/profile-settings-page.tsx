@@ -127,6 +127,10 @@ export function ProfileSettingsPage() {
 
   const saveStore = async () => {
     if (saving) return
+    if (!editingStore && !isOwner) {
+      showToast('Hanya pemilik toko yang dapat menambahkan cabang.', 'error')
+      return
+    }
     const validation = validateStore()
     if (validation) {
       showToast(validation, 'error')

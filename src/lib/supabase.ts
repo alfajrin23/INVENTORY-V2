@@ -16,7 +16,11 @@ export function requireSupabase() {
 
 export function databaseError(error: { message: string; code?: string }): Error {
   if (error.code === '23505') return new Error('Barcode atau data tersebut sudah terdaftar.')
-  if (error.code === '42501') return new Error('Akses ditolak. Masuk kembali dan pastikan toko milik akun Anda.')
+  if (error.code === '42501') {
+    const detail = error.message.trim()
+    if (detail && !/row-level security|permission denied/i.test(detail)) return new Error(detail)
+    return new Error('Akses ditolak. Masuk kembali dan pastikan toko milik akun Anda.')
+  }
   if (/fetch|network|timeout|abort/i.test(error.message)) return new Error('Koneksi terputus atau waktu habis. Coba lagi; transaksi yang sama tidak akan dicatat dua kali.')
   return new Error(error.message)
 }

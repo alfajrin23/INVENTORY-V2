@@ -62,7 +62,15 @@ try {
   await db.exec(`reset role; set role authenticated; set request.jwt.claim.sub='${owner}';`)
   assert.equal((await db.query(`select public.current_store_role($1) as role`, [store])).rows[0].role, 'owner')
   assert.equal((await db.query(`select public.current_user_can_create_store() as allowed`)).rows[0].allowed, true)
-  await db.exec(`insert into public.stores(owner_id,name) values('${owner}','Owner New Branch')`)
+  await db.exec('reset role;')
+  await db.exec(await readFile(new URL('../supabase/migrations/20261103100000_owner_store_creation_rpc.sql', import.meta.url), 'utf8'))
+  await db.exec(`set role authenticated; set request.jwt.claim.sub='${owner}';`)
+  const createdStores = await db.query(`select * from public.create_owned_store($1,$2,$3,$4)`, [
+    'Owner New Branch', 'Alamat cabang', 'https://maps.google.com/', null,
+  ])
+  assert.equal(createdStores.rows[0].owner_id, owner)
+  assert.equal(createdStores.rows[0].name, 'Owner New Branch')
+  assert.equal(createdStores.rows[0].address, 'Alamat cabang')
 
   await db.exec(`reset role; set role authenticated; set request.jwt.claim.sub='${manager}';`)
   assert.equal((await db.query(`select public.current_store_role($1) as role`, [store])).rows[0].role, 'manager')
@@ -71,6 +79,9 @@ try {
   const managerLog = (await db.query(`select actor_name from public.audit_logs where store_id=$1 order by created_at desc limit 1`, [store])).rows
   assert.equal(managerLog[0].actor_name, 'Manager')
   await assert.rejects(db.exec(`insert into public.stores(owner_id,name) values('${manager}','Manager Cannot Add Store')`), /row-level security|policy/)
+  await assert.rejects(db.query(`select * from public.create_owned_store($1,$2,$3,$4)`, [
+    'Manager Cannot Add Store', '', '', null,
+  ]), /Hanya pemilik toko/)
 
   await db.exec(`reset role; set role authenticated; set request.jwt.claim.sub='${cashier}';`)
   assert.equal((await db.query(`select public.current_store_role($1) as role`, [store])).rows[0].role, 'cashier')
@@ -91,7 +102,7 @@ try {
   assert.equal(history[0].oleh, 'Cashier')
   const logs = (await db.query(`select actor_name from public.audit_logs where store_id=$1 order by created_at desc limit 1`, [store])).rows
   assert.equal(logs[0].actor_name, 'Cashier')
-  console.log('PASS: employee migration, owner/manager/cashier roles, store creation restrictions, outgoing-only cashier RPC, and actor audit attribution (no QRIS payment was confirmed).')
+  console.log('PASS: owner branch creation assigns the authenticated owner; managers and cashiers cannot create stores; employee roles, transaction limits, and audit attribution are enforced (no QRIS payment was confirmed).')
 } finally {
   await db.close()
 }

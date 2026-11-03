@@ -92,8 +92,14 @@ export const supabaseRepository: InventoryRepository = {
   },
   async setActiveStore(id) { localStorage.setItem('activeStoreId', id) },
   async addStore(store) {
-    const { data, error } = await requireSupabase().from('stores').insert(storeRow(store)).select(STORE_COLUMNS).single()
+    const { data, error } = await requireSupabase().rpc('create_owned_store', {
+      p_name: store.name,
+      p_address: store.address,
+      p_address_link: store.addressLink,
+      p_photo: store.photo?.trim() || null,
+    })
     if (error) throw databaseError(error)
+    if (!data || typeof data !== 'object' || !('id' in data)) throw new Error('Toko baru belum tersimpan. Silakan coba lagi.')
     localStorage.setItem('activeStoreId', data.id)
     return fromRow<StoreRecord>(data)
   },

@@ -4,14 +4,15 @@ test.use({ baseURL: 'http://127.0.0.1:5174' })
 
 const ids = {
   owner: '00000000-0000-4000-8000-000000000001',
-  cashier: '00000000-0000-4000-8000-000000000002',
+  manager: '00000000-0000-4000-8000-000000000002',
+  cashier: '00000000-0000-4000-8000-000000000003',
   store: '00000000-0000-4000-8000-000000000010',
   product: '00000000-0000-4000-8000-000000000020',
 }
 
-async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', options: { qris?: boolean | 'legacy' | 'mismatched'; employeeInvite?: boolean; autoConfirmNotification?: boolean } = {}) {
-  const userId = role === 'owner' ? ids.owner : ids.cashier
-  const email = role === 'owner' ? 'owner@example.test' : 'cashier@example.test'
+async function mockSignedInSupabase(page: Page, role: 'owner' | 'manager' | 'cashier', options: { qris?: boolean | 'legacy' | 'mismatched'; employeeInvite?: boolean; autoConfirmNotification?: boolean } = {}) {
+  const userId = role === 'owner' ? ids.owner : role === 'manager' ? ids.manager : ids.cashier
+  const email = role === 'owner' ? 'owner@example.test' : role === 'manager' ? 'manager@example.test' : 'cashier@example.test'
   const user = { id: userId, aud: 'authenticated', role: 'authenticated', email, created_at: new Date().toISOString(), app_metadata: {}, user_metadata: {} }
   const token = [{ alg: 'HS256', typ: 'JWT' }, { sub: userId, role: 'authenticated', exp: Math.floor(Date.now() / 1000) + 3600 }, 'signature']
     .map(value => Buffer.from(JSON.stringify(value)).toString('base64url')).join('.')
@@ -24,6 +25,7 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
   let qrisConfirmCalls = 0
   let inventoryTransactionCalls = 0
   let employeeInviteCalls = 0
+  let createStorePayload: Record<string, unknown> | null = null
 
   await page.route('http://127.0.0.1:54321/**', async route => {
     const url = new URL(route.request().url())
@@ -35,6 +37,20 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
     }
     if (url.pathname === '/auth/v1/user') { await route.fulfill({ headers, json: user }); return }
     if (url.pathname === '/rest/v1/rpc/current_store_role') { await route.fulfill({ headers, json: role }); return }
+    if (url.pathname === '/rest/v1/rpc/create_owned_store') {
+      createStorePayload = route.request().postDataJSON()
+      await route.fulfill({ headers, json: {
+        id: '00000000-0000-4000-8000-000000000012',
+        owner_id: ids.owner,
+        name: createStorePayload.p_name,
+        address: createStorePayload.p_address,
+        address_link: createStorePayload.p_address_link,
+        photo: createStorePayload.p_photo,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } })
+      return
+    }
     if (url.pathname === '/rest/v1/stores') {
       await route.fulfill({ headers, json: [{ id: ids.store, owner_id: ids.owner, name: 'Cabang QRIS', address: 'Majalengka', address_link: '', created_at: new Date().toISOString() }] })
       return
@@ -94,12 +110,13 @@ async function mockSignedInSupabase(page: Page, role: 'owner' | 'cashier', optio
     qrisConfirmCalls: () => qrisConfirmCalls,
     inventoryTransactionCalls: () => inventoryTransactionCalls,
     employeeInviteCalls: () => employeeInviteCalls,
+    createStorePayload: () => createStorePayload,
     signIn: async () => {
       await page.goto('/')
       await page.getByLabel('Email', { exact: true }).fill(email)
       await page.getByLabel('Password', { exact: true }).fill('test-password')
       await page.getByRole('button', { name: 'Masuk', exact: true }).click()
-      await expect(page.getByText('Cabang QRIS').first()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Profil toko' })).toBeVisible()
     },
   }
 }
@@ -331,6 +348,7 @@ test('settings features open separate pages from the settings menu', async ({ pa
 test('owner can invite a manager by email and cashier is limited to outgoing scanner and QRIS history', async ({ page }) => {
   const ownerMock = await mockSignedInSupabase(page, 'owner', { employeeInvite: true })
   await ownerMock.signIn()
+  await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/profilsetting.html')
   await expect(page.getByRole('heading', { name: 'Cabang & Karyawan' })).toBeVisible()
   await page.getByLabel('Email karyawan').fill('manager@example.test')
@@ -339,6 +357,7 @@ test('owner can invite a manager by email and cashier is limited to outgoing sca
   await page.getByRole('button', { name: 'Undang' }).click()
   await expect(page.getByText(/Karyawan menetapkan password melalui tautan undangan/)).toBeVisible()
   expect(ownerMock.employeeInviteCalls()).toBe(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
   await page.context().clearCookies()
   await page.goto('/')
@@ -353,4 +372,40 @@ test('owner can invite a manager by email and cashier is limited to outgoing sca
   await page.goto('/profilsetting.html')
   await expect(page.getByRole('button', { name: 'Tambah Toko' })).toHaveCount(0)
   await expect(page.getByRole('heading', { name: 'Cabang & Karyawan' })).toHaveCount(0)
+})
+
+test('owner can add a branch and manager cannot open the branch creation form', async ({ page }) => {
+  const ownerMock = await mockSignedInSupabase(page, 'owner')
+  await ownerMock.signIn()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/profilsetting.html')
+
+  await page.getByRole('button', { name: 'Tambah Toko' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('heading', { name: 'Tambah Toko Baru' })).toBeVisible()
+  await dialog.getByLabel('Nama Toko').fill('Cabang Cirebon')
+  await dialog.getByLabel('Alamat Toko').fill('Jalan Cirebon')
+  await dialog.getByLabel('Link Lokasi URL').fill('https://maps.google.com/?q=cirebon')
+  await dialog.getByRole('button', { name: 'Simpan' }).click()
+
+  await expect(page.getByText('Toko baru dibuat')).toBeVisible()
+  expect(ownerMock.createStorePayload()).toMatchObject({
+    p_name: 'Cabang Cirebon',
+    p_address: 'Jalan Cirebon',
+    p_address_link: 'https://maps.google.com/?q=cirebon',
+    p_photo: null,
+  })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.context().clearCookies()
+  await page.evaluate(() => {
+    localStorage.clear()
+    localStorage.setItem('ab:last-seen-release-notes-version:v1', '1.2.10')
+  })
+  await page.reload()
+  const managerMock = await mockSignedInSupabase(page, 'manager')
+  await managerMock.signIn()
+  await page.goto('/profilsetting.html')
+  await expect(page.getByRole('heading', { name: 'Cabang & Karyawan' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Tambah Toko' })).toHaveCount(0)
 })
